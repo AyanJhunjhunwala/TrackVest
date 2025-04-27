@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "jsx": "react-jsx",
+    "strict": false,
+    "allowJs": true,          // lets you keep .jsx files
+    "skipLibCheck": true,
+    "baseUrl": ".",           // <-- required for aliases
+    "paths": {
+      "@/*": ["./src/*"]      // <-- shadcn-ui + Vite alias
+    }
+  },
+  "include": ["src"]
+}
