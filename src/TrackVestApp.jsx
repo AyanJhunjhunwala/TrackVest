@@ -12,6 +12,7 @@ import StocksTab from './stocks';
 import RealEstateTab from './realestate';
 import InsightsTab from './insights';
 import ApiKeysTab from './apikeys';
+import ZapierChat from './ZapierChat';
 
 // Import utility functions
 import { 
@@ -24,7 +25,7 @@ import {
 
 export default function App() {
   // State for API key
-  const [apiKey, setApiKey] = useState("");
+  const [apiKey, setApiKey] = useState("LESMQ2XRINEYXI2F");
   const [showApiInput, setShowApiInput] = useState(false);
   const [apiError, setApiError] = useState(""); // General API error
   const [refreshApiError, setRefreshApiError] = useState(""); // Specific error during refresh
@@ -102,7 +103,7 @@ export default function App() {
 
   // API management state
   const [apiKeys, setApiKeys] = useState([
-    { id: 1, name: "Alpha Vantage", key: "DEMO12345", service: "Stock/Crypto Data", status: "Active", created: "2023-11-05", visible: false },
+    { id: 1, name: "Alpha Vantage", key: "LESMQ2XRINEYXI2F", service: "Stock/Crypto Data", status: "Active", created: "2023-11-05", visible: false },
     { id: 2, name: "Real Estate API (Simulated)", key: "RE98765DEMO", service: "Property Valuations", status: "Active", created: "2024-01-22", visible: false },
   ]);
 
@@ -383,20 +384,20 @@ export default function App() {
         <div className="max-w-7xl mx-auto">
           {/* Main Navigation Tabs */}
           <Tabs defaultValue="overview" className={`${darkMode ? 'text-slate-300' : 'text-slate-700'} mb-6`}>
-            <TabsList className={`grid w-full grid-cols-3 sm:grid-cols-5 mb-4 ${darkMode ? 'bg-slate-800' : 'bg-slate-200'}`}>
-              <TabsTrigger value="overview" className="gap-1 sm:gap-2 text-xs sm:text-sm px-1">
+            <TabsList className={`grid w-full grid-cols-3 sm:grid-cols-5 mb-4 ${darkMode ? 'bg-slate-800/50' : 'bg-slate-200/70'} rounded-xl overflow-hidden p-1`}>
+              <TabsTrigger value="overview" className="gap-1 sm:gap-2 text-xs sm:text-sm px-2 py-1.5 rounded-lg transition-all duration-200">
                 Overview
               </TabsTrigger>
-              <TabsTrigger value="stocks" className="gap-1 sm:gap-2 text-xs sm:text-sm px-1">
+              <TabsTrigger value="stocks" className="gap-1 sm:gap-2 text-xs sm:text-sm px-2 py-1.5 rounded-lg transition-all duration-200">
                 Stocks/Crypto
               </TabsTrigger>
-              <TabsTrigger value="realestate" className="gap-1 sm:gap-2 text-xs sm:text-sm px-1">
+              <TabsTrigger value="realestate" className="gap-1 sm:gap-2 text-xs sm:text-sm px-2 py-1.5 rounded-lg transition-all duration-200">
                 Real Estate
               </TabsTrigger>
-              <TabsTrigger value="insights" className="gap-1 sm:gap-2 text-xs sm:text-sm px-1">
+              <TabsTrigger value="insights" className="gap-1 sm:gap-2 text-xs sm:text-sm px-2 py-1.5 rounded-lg transition-all duration-200">
                 Insights
               </TabsTrigger>
-              <TabsTrigger value="api" className="gap-1 sm:gap-2 text-xs sm:text-sm px-1">
+              <TabsTrigger value="api" className="gap-1 sm:gap-2 text-xs sm:text-sm px-2 py-1.5 rounded-lg transition-all duration-200">
                 API Keys
               </TabsTrigger>
             </TabsList>
@@ -465,6 +466,9 @@ export default function App() {
           <a href="https://www.alphavantage.co" target="_blank" rel="noopener noreferrer" className="ml-2 underline hover:text-emerald-500">Data provided by Alpha Vantage</a>
         </p>
       </footer>
+
+      {/* Zapier Chat */}
+      <ZapierChat darkMode={darkMode} positions={positions} realEstateHoldings={realEstateHoldings} />
     </div>
   );
 }

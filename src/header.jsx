@@ -1,8 +1,6 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { Settings, RefreshCcw, Loader2, AlertCircle } from 'lucide-react';
+import { RefreshCcw, Loader2, AlertCircle, Sun, Moon } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function Header({ 
@@ -28,25 +26,19 @@ export default function Header({
         <Logo />
 
         <div className="flex items-center gap-3 sm:gap-6">
-          {/* Dark Mode Switch */}
-          <div className="flex items-center gap-2">
-            <Label htmlFor="dark-mode" className="text-sm font-medium">Dark Mode</Label>
-            <Switch
-              id="dark-mode"
-              checked={darkMode}
-              onCheckedChange={setDarkMode}
-              className="transform scale-90"
-            />
-          </div>
-
+          {/* Dark Mode Toggle with Sun/Moon Icon */}
           <Button
-            variant={darkMode ? "outline" : "secondary"}
+            variant="ghost"
             size="sm"
-            className="gap-1 px-2 sm:px-3 sm:gap-2"
-            onClick={() => setShowApiInput(!showApiInput)}
+            onClick={() => setDarkMode(!darkMode)}
+            className="w-9 h-9 p-0 rounded-full"
           >
-            <Settings className="h-4 w-4" />
-            <span className="hidden sm:inline">API Key</span>
+            {darkMode ? (
+              <Sun className="h-4 w-4 text-yellow-400" />
+            ) : (
+              <Moon className="h-4 w-4 text-slate-700" />
+            )}
+            <span className="sr-only">Toggle theme</span>
           </Button>
 
           <Button
