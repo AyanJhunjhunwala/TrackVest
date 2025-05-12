@@ -1,0 +1,15 @@
+{
+  "name": "trackvest-server",
+  "version": "1.0.0",
+  "description": "TrackVest server",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "node-fetch": "^3.3.2"
+  }
+}

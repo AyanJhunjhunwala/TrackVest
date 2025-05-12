@@ -1,188 +1,155 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { 
-  PlusCircle, Trash2, Eye, EyeOff, XCircle, CheckCircle 
+  PlusCircle, Trash2, Eye, EyeOff, XCircle, CheckCircle, Save, RefreshCw
 } from "lucide-react";
 
 export default function ApiKeysTab({ darkMode, apiKeys, setApiKeys }) {
   // Local state
-  const [newApiKey, setNewApiKey] = useState({ name: "", service: "" });
+  const [groqApiKey, setGroqApiKey] = useState("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");
+  const [isGroqApiKeyVisible, setIsGroqApiKeyVisible] = useState(false);
+  const [savedGroqApiKey, setSavedGroqApiKey] = useState(localStorage.getItem('groqApiKey') || "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");
+  const [isGroqKeySaved, setIsGroqKeySaved] = useState(false);
+  const [isPolygonKeyVisible, setIsPolygonKeyVisible] = useState(false);
 
-  // Generate random key
-  const generateRandomKey = () => {
-    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    const length = 24;
-    let result = '';
-    const charactersLength = characters.length;
-    for (let i = 0; i < length; i++) {
-      result += characters.charAt(Math.floor(Math.random() * charactersLength));
+  // Save Groq API key to localStorage
+  useEffect(() => {
+    if (savedGroqApiKey) {
+      localStorage.setItem('groqApiKey', savedGroqApiKey);
     }
-    return result;
-  };
+  }, [savedGroqApiKey]);
 
-  // Add new API key
-  const addNewApiKey = () => {
-    if (!newApiKey.name || !newApiKey.service) {
-      alert("Please provide both name and service");
-      return;
-    }
-
-    const today = new Date();
-    const formattedDate = today.toISOString().split('T')[0];
+  // Save Groq API Key
+  const saveGroqApiKey = () => {
+    setSavedGroqApiKey(groqApiKey);
+    setIsGroqKeySaved(true);
     
-    const newKey = {
-      id: Date.now(),
-      name: newApiKey.name,
-      service: newApiKey.service,
-      key: generateRandomKey(),
-      status: "Active",
-      created: formattedDate,
-      visible: false
-    };
-
-    setApiKeys([...apiKeys, newKey]);
-    setNewApiKey({ name: "", service: "" });
-  };
-
-  // Toggle API key visibility
-  const toggleApiKeyVisibility = (id) => {
-    setApiKeys(apiKeys.map(key => 
-      key.id === id ? { ...key, visible: !key.visible } : key
-    ));
-  };
-
-  // Toggle API key status
-  const toggleApiKeyStatus = (id) => {
-    setApiKeys(apiKeys.map(key => 
-      key.id === id ? { ...key, status: key.status === 'Active' ? 'Inactive' : 'Active' } : key
-    ));
-  };
-
-  // Delete API key
-  const deleteApiKey = (id) => {
-    setApiKeys(apiKeys.filter(key => key.id !== id));
+    // Show success message briefly
+    setTimeout(() => {
+      setIsGroqKeySaved(false);
+    }, 3000);
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      {/* Add New API Key */}
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Groq AI Chatbot API */}
       <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4 }}>
         <Card className={`${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md`}>
           <CardHeader>
-            <CardTitle className={`${darkMode ? 'text-slate-200' : 'text-slate-800'} text-lg font-semibold`}>Add New API Key</CardTitle>
-            <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Manage external API connections (simulated).</p>
+            <CardTitle className={`${darkMode ? 'text-slate-200' : 'text-slate-800'} text-lg font-semibold`}>Groq AI Chatbot</CardTitle>
+            <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Manage your Groq API key for the AI assistant.</p>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <Label htmlFor="apiKeyName" className="text-sm font-medium mb-1 block">Key Name / Label</Label>
-              <Input 
-                id="apiKeyName" 
-                name="name" 
-                placeholder="e.g., My Brokerage API" 
-                value={newApiKey.name} 
-                onChange={(e) => setNewApiKey({ ...newApiKey, name: e.target.value })} 
-                className={`${darkMode ? 'bg-slate-700 border-slate-600' : 'bg-white'}`} 
-              />
+              <Label htmlFor="groqApiKey" className="text-sm font-medium mb-1 block">Groq API Key</Label>
+              <div className="flex gap-2">
+                <div className="relative flex-grow">
+                  <Input 
+                    id="groqApiKey" 
+                    name="groqApiKey" 
+                    type={isGroqApiKeyVisible ? "text" : "password"}
+                    placeholder="Enter your Groq API key" 
+                    value={groqApiKey} 
+                    onChange={(e) => setGroqApiKey(e.target.value)} 
+                    className={`${darkMode ? 'bg-slate-700 border-slate-600' : 'bg-white'} pr-9`} 
+                  />
+                  <button 
+                    type="button"
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-200"
+                    onClick={() => setIsGroqApiKeyVisible(!isGroqApiKeyVisible)}
+                  >
+                    {isGroqApiKeyVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                <Button 
+                  onClick={saveGroqApiKey} 
+                  className={`flex-shrink-0 gap-1 ${isGroqKeySaved ? 'bg-emerald-600 hover:bg-emerald-700' : darkMode ? 'bg-slate-700 hover:bg-slate-600' : 'bg-slate-200 hover:bg-slate-300'}`}
+                >
+                  {isGroqKeySaved ? (
+                    <>
+                      <CheckCircle className="h-4 w-4" /> Saved
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4" /> Save
+                    </>
+                  )}
+                </Button>
+              </div>
+              <p className={`mt-2 text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                Your Groq API key is used to power the AI chatbot. Get a key at <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer" className="text-emerald-500 hover:underline">console.groq.com</a>.
+              </p>
             </div>
-            <div>
-              <Label htmlFor="apiKeyService" className="text-sm font-medium mb-1 block">Service / Purpose</Label>
-              <Input 
-                id="apiKeyService" 
-                name="service" 
-                placeholder="e.g., Portfolio Sync" 
-                value={newApiKey.service} 
-                onChange={(e) => setNewApiKey({ ...newApiKey, service: e.target.value })} 
-                className={`${darkMode ? 'bg-slate-700 border-slate-600' : 'bg-white'}`} 
-              />
+            <div className={`rounded-md p-3 ${darkMode ? 'bg-slate-700/50' : 'bg-slate-100'}`}>
+              <h3 className={`text-sm font-medium mb-1 ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>Current Configuration</h3>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Status: <span className="text-emerald-500">Active</span></p>
+                  <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Model: llama3-70b-8192</p>
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className={`h-8 px-2 text-xs ${darkMode ? 'hover:bg-slate-700' : 'hover:bg-slate-200'}`}
+                  onClick={() => window.location.reload()}
+                >
+                  <RefreshCw className="h-3 w-3 mr-1" /> Refresh
+                </Button>
+              </div>
             </div>
           </CardContent>
-          <CardFooter>
-            <Button 
-              onClick={addNewApiKey} 
-              className={`w-full gap-2 ${darkMode ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-emerald-600 hover:bg-emerald-700 text-white'}`}
-            >
-              <PlusCircle className="h-4 w-4" /> Add API Key
-            </Button>
-          </CardFooter>
         </Card>
       </motion.div>
 
-      {/* API Keys List */}
-      <motion.div
-        initial={{ opacity: 0, x: 20 }} 
-        animate={{ opacity: 1, x: 0 }} 
-        transition={{ duration: 0.4, delay: 0.1 }}
-        className="lg:col-span-2"
-      >
+      {/* Polygon.io API */}
+      <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, delay: 0.1 }}>
         <Card className={`${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md`}>
           <CardHeader>
-            <CardTitle className={`${darkMode ? 'text-slate-200' : 'text-slate-800'} text-lg font-semibold`}>Managed API Keys</CardTitle>
+            <CardTitle className={`${darkMode ? 'text-slate-200' : 'text-slate-800'} text-lg font-semibold`}>Polygon.io Stock & Crypto Data</CardTitle>
+            <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Connect to Polygon.io for financial market data</p>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
-              {apiKeys.length > 0 ? apiKeys.map(key => (
-                <motion.div
-                  key={key.id} 
-                  layout 
-                  initial={{ opacity: 0, y: 10 }} 
-                  animate={{ opacity: 1, y: 0 }} 
-                  exit={{ opacity: 0, x: -20 }} 
-                  transition={{ duration: 0.3 }}
-                  className={`p-3 rounded-lg ${darkMode ? 'bg-slate-700/50' : 'bg-slate-100'}`}
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                    <div className="flex-grow mb-2 sm:mb-0">
-                      <p className={`font-medium text-sm ${darkMode ? 'text-slate-100' : 'text-slate-900'}`}>{key.name}</p>
-                      <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{key.service}</p>
-                      <div className="flex items-center mt-1">
-                        <span className={`text-xs font-mono mr-2 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                          {key.visible ? key.key : `••••••••${key.key.slice(-4)}`}
-                        </span>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-5 w-5 text-slate-400 hover:text-slate-200" 
-                          onClick={() => toggleApiKeyVisibility(key.id)}
-                        >
-                          {key.visible ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0 flex-wrap">
-                      <div className="flex items-center gap-1 text-xs">
-                        <span className={`w-2 h-2 rounded-full ${key.status === 'Active' ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
-                        <span className={`${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>{key.status}</span>
-                      </div>
-                      <span className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Added: {key.created}</span>
-                      <div className="flex gap-1">
-                        <Button
-                          variant={key.status === 'Active' ? 'outline' : 'secondary'} 
-                          size="sm" 
-                          className="h-7 px-2 text-xs"
-                          onClick={() => toggleApiKeyStatus(key.id)}
-                        >
-                          {key.status === 'Active' ? <XCircle className="h-3 w-3 mr-1" /> : <CheckCircle className="h-3 w-3 mr-1" />}
-                          {key.status === 'Active' ? 'Deactivate' : 'Activate'}
-                        </Button>
-                        <Button
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-7 w-7 text-slate-400 hover:text-rose-500 hover:bg-rose-500/10"
-                          onClick={() => deleteApiKey(key.id)}
-                        > 
-                          <Trash2 className="h-3.5 w-3.5" /> 
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-              )) : ( 
-                <p className={`${darkMode ? 'text-slate-400' : 'text-slate-500'} text-center py-4`}>No API keys added yet.</p> 
-              )}
+          <CardContent className="space-y-4">
+            <div>
+              <Label htmlFor="polygonApiKey" className="text-sm font-medium mb-1 block">Polygon.io API Key</Label>
+              <div className="flex gap-2">
+                <div className="relative flex-grow">
+                  <Input 
+                    id="polygonApiKey" 
+                    name="polygonApiKey" 
+                    type={isPolygonKeyVisible ? "text" : "password"}
+                    placeholder="Enter your Polygon.io API key" 
+                    value="9h2tWR97GWuVzS5a27bqgC4JjhC3H1uv" 
+                    readOnly
+                    className={`${darkMode ? 'bg-slate-700 border-slate-600' : 'bg-white'} pr-9`} 
+                  />
+                  <button 
+                    type="button"
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-200"
+                    onClick={() => setIsPolygonKeyVisible(!isPolygonKeyVisible)}
+                  >
+                    {isPolygonKeyVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+              <p className={`mt-2 text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                Polygon.io provides real-time and historical data for stocks, crypto, and forex. Get your own API key at <a href="https://polygon.io/dashboard/signup" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">polygon.io</a>.
+              </p>
+            </div>
+            <div className={`rounded-md p-3 ${darkMode ? 'bg-slate-700/50' : 'bg-slate-100'}`}>
+              <h3 className={`text-sm font-medium mb-1 ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>Current Configuration</h3>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Status: <span className="text-emerald-500">Active</span></p>
+                  <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Usage: <span className="text-emerald-500">Basic Plan</span></p>
+                </div>
+                <div className="text-xs text-emerald-500 font-medium">
+                  Connected
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>

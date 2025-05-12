@@ -12,7 +12,7 @@ import StocksTab from './stocks';
 import RealEstateTab from './realestate';
 import InsightsTab from './insights';
 import ApiKeysTab from './apikeys';
-import ZapierChat from './ZapierChat';
+import GroqChat from './GroqChat';
 
 // Import utility functions
 import { 
@@ -25,7 +25,7 @@ import {
 
 export default function App() {
   // State for API key
-  const [apiKey, setApiKey] = useState("LESMQ2XRINEYXI2F");
+  const [apiKey, setApiKey] = useState("9h2tWR97GWuVzS5a27bqgC4JjhC3H1uv");
   const [showApiInput, setShowApiInput] = useState(false);
   const [apiError, setApiError] = useState(""); // General API error
   const [refreshApiError, setRefreshApiError] = useState(""); // Specific error during refresh
@@ -103,8 +103,7 @@ export default function App() {
 
   // API management state
   const [apiKeys, setApiKeys] = useState([
-    { id: 1, name: "Alpha Vantage", key: "LESMQ2XRINEYXI2F", service: "Stock/Crypto Data", status: "Active", created: "2023-11-05", visible: false },
-    { id: 2, name: "Real Estate API (Simulated)", key: "RE98765DEMO", service: "Property Valuations", status: "Active", created: "2024-01-22", visible: false },
+    { id: 1, name: "Polygon.io", key: "9h2tWR97GWuVzS5a27bqgC4JjhC3H1uv", service: "Stock/Crypto Data", status: "Active", created: "2023-11-05", visible: false },
   ]);
 
   // Calculations
@@ -203,14 +202,14 @@ export default function App() {
     console.log("API Key saved (Note: Still not stored securely in this demo)");
   };
 
-  // Refresh data using Alpha Vantage API or simulation
+  // Refresh data using Polygon.io API or simulation
   const refreshData = async () => {
     setIsLoading(true);
     setRefreshApiError("");
   
     /* 1. If no key, fall back to simulator right away */
     if (!apiKey) {
-      setRefreshApiError("AlphaVantage API key not set. Using simulated data.");
+      setRefreshApiError("Polygon.io API key not set. Using simulated data.");
       simulateRefresh();
       return;
     }
@@ -355,7 +354,7 @@ export default function App() {
                 <Input
                   id="apiKeyInput"
                   type="password"
-                  placeholder="Enter your AlphaVantage API Key"
+                  placeholder="Enter your Polygon.io API Key"
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
                   className={`${darkMode ? 'bg-slate-700 border-slate-600 placeholder-slate-400' : 'bg-white border-slate-300 placeholder-slate-500'} text-sm`}
@@ -369,7 +368,7 @@ export default function App() {
                 Save API Key
               </Button>
               <div className="text-xs text-slate-400 flex-shrink-0">
-                <a href="https://www.alphavantage.co/support/#api-key" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-emerald-400 transition-colors">
+                <a href="https://polygon.io/dashboard/signup" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-emerald-400 transition-colors">
                   <Info className="h-3 w-3" />
                   Get a free key
                 </a>
@@ -385,19 +384,19 @@ export default function App() {
           {/* Main Navigation Tabs */}
           <Tabs defaultValue="overview" className={`${darkMode ? 'text-slate-300' : 'text-slate-700'} mb-6`}>
             <TabsList className={`grid w-full grid-cols-3 sm:grid-cols-5 mb-4 ${darkMode ? 'bg-slate-800/50' : 'bg-slate-200/70'} rounded-xl overflow-hidden p-1`}>
-              <TabsTrigger value="overview" className="gap-1 sm:gap-2 text-xs sm:text-sm px-2 py-1.5 rounded-lg transition-all duration-200">
+              <TabsTrigger value="overview" className="gap-1 sm:gap-2 text-xs sm:text-sm px-2 py-1.5 rounded-lg transition-all duration-200 flex items-center justify-center">
                 Overview
               </TabsTrigger>
-              <TabsTrigger value="stocks" className="gap-1 sm:gap-2 text-xs sm:text-sm px-2 py-1.5 rounded-lg transition-all duration-200">
+              <TabsTrigger value="stocks" className="gap-1 sm:gap-2 text-xs sm:text-sm px-2 py-1.5 rounded-lg transition-all duration-200 flex items-center justify-center">
                 Stocks/Crypto
               </TabsTrigger>
-              <TabsTrigger value="realestate" className="gap-1 sm:gap-2 text-xs sm:text-sm px-2 py-1.5 rounded-lg transition-all duration-200">
+              <TabsTrigger value="realestate" className="gap-1 sm:gap-2 text-xs sm:text-sm px-2 py-1.5 rounded-lg transition-all duration-200 flex items-center justify-center">
                 Real Estate
               </TabsTrigger>
-              <TabsTrigger value="insights" className="gap-1 sm:gap-2 text-xs sm:text-sm px-2 py-1.5 rounded-lg transition-all duration-200">
+              <TabsTrigger value="insights" className="gap-1 sm:gap-2 text-xs sm:text-sm px-2 py-1.5 rounded-lg transition-all duration-200 flex items-center justify-center">
                 Insights
               </TabsTrigger>
-              <TabsTrigger value="api" className="gap-1 sm:gap-2 text-xs sm:text-sm px-2 py-1.5 rounded-lg transition-all duration-200">
+              <TabsTrigger value="api" className="gap-1 sm:gap-2 text-xs sm:text-sm px-2 py-1.5 rounded-lg transition-all duration-200 flex items-center justify-center">
                 API Keys
               </TabsTrigger>
             </TabsList>
@@ -462,13 +461,13 @@ export default function App() {
       {/* Footer */}
       <footer className={`border-t mt-8 py-4 px-6 text-center ${darkMode ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-slate-50'}`}>
         <p className={`text-xs ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>
-          TrackVest © {new Date().getFullYear()} | Data is sourced via Alpha Vantage API and simulation. For demonstration purposes only.
-          <a href="https://www.alphavantage.co" target="_blank" rel="noopener noreferrer" className="ml-2 underline hover:text-emerald-500">Data provided by Alpha Vantage</a>
+          TrackVest © {new Date().getFullYear()} | Data is sourced via Polygon.io API and simulation. For demonstration purposes only.
+          <a href="https://polygon.io" target="_blank" rel="noopener noreferrer" className="ml-2 underline hover:text-emerald-500">Data provided by Polygon.io</a>
         </p>
       </footer>
 
-      {/* Zapier Chat */}
-      <ZapierChat darkMode={darkMode} positions={positions} realEstateHoldings={realEstateHoldings} />
+      {/* Chatbot */}
+      <GroqChat darkMode={darkMode} positions={positions} realEstateHoldings={realEstateHoldings} />
     </div>
   );
 }
