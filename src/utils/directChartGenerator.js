@@ -526,93 +526,239 @@ const generateChartCodeWithGemini = async (chartRequest) => {
  * Utilities for generating chart data without external API dependencies
  */
 
-// Generate random stock price data with realistic patterns
-export const createTestStockChart = (symbol, timeframe = '1m') => {
-  // Define time period
-  const days = timeframe === '1w' ? 7 :
-               timeframe === '2w' ? 14 :
-               timeframe === '1m' ? 30 :
-               timeframe === '3m' ? 90 :
-               timeframe === '6m' ? 180 :
-               timeframe === '1y' ? 365 : 30;
-  
-  // Set realistic starting values based on ticker
-  const basePrice = 
-    symbol === 'AAPL' ? 180 :
-    symbol === 'MSFT' ? 350 :
-    symbol === 'GOOGL' ? 140 :
-    symbol === 'AMZN' ? 160 :
-    symbol === 'META' ? 325 :
-    symbol === 'TSLA' ? 250 :
-    symbol === 'JPM' ? 170 :
-    symbol === 'V' ? 230 :
-    symbol === 'NVDA' ? 450 :
-    symbol === 'BAC' ? 35 :
-    symbol === 'BTC' || symbol === 'Bitcoin' ? 45000 :
-    symbol === 'ETH' || symbol === 'Ethereum' ? 3000 :
-    symbol === 'XRP' ? 0.5 :
-    symbol === 'ADA' ? 0.4 :
-    symbol === 'SOL' ? 100 :
-    symbol === 'DOT' ? 6 :
-    symbol === 'DOGE' ? 0.1 : 
-    100; // Default value
-  
-  // Generate volatility based on the asset
-  const volatility = 
-    symbol.includes('BTC') || symbol === 'Bitcoin' ? 0.03 :
-    symbol.includes('ETH') || symbol === 'Ethereum' ? 0.04 :
-    symbol === 'TSLA' ? 0.025 :
-    symbol === 'NVDA' ? 0.02 :
-    symbol === 'AAPL' || symbol === 'MSFT' ? 0.01 : 0.015;
-  
-  // Generate dates
-  const dates = [];
-  const prices = [];
-  const today = new Date();
-  
-  for (let i = days; i >= 0; i--) {
-    const date = new Date();
-    date.setDate(today.getDate() - i);
-    dates.push(date.toISOString().split('T')[0]);
-  }
-  
-  // Generate semi-realistic price movements
-  // Start with base price
-  let currentPrice = basePrice;
-  prices.push(currentPrice);
-  
-  // Add a trend bias (0.6 = 60% chance of following the trend)
-  const trendBias = 0.6;
-  let trend = Math.random() > 0.5 ? 1 : -1;
-  
-  // Generate subsequent prices with momentum and volatility
-  for (let i = 1; i <= days; i++) {
-    // 20% chance of trend reversal
-    if (Math.random() > 0.8) {
-      trend = -trend;
+// Add Polygon API helper functions
+const POLYGON_API_KEY = localStorage.getItem('polygonApiKey') || "9h2tWR97GWuVzS5a27bqgC4JjhC3H1uv"; // Use localStorage value or specified API key
+
+// Fetch historical stock data from Polygon API
+async function fetchPolygonStockData(symbol, timeframe = '1m') {
+  try {
+    // Convert timeframe to API parameters
+    const endDate = new Date().toISOString().split('T')[0];
+    let startDate;
+    
+    switch(timeframe) {
+      case '1w': 
+        startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        break;
+      case '2w': 
+        startDate = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        break;
+      case '1m': 
+        startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        break;
+      case '3m': 
+        startDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        break;
+      case '6m': 
+        startDate = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        break;
+      case '1y': 
+        startDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        break;
+      default:
+        startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     }
     
-    // Calculate price movement with trend bias
-    const randomFactor = Math.random();
-    const movement = (randomFactor > trendBias ? -trend : trend) * volatility * currentPrice;
+    // Use Polygon Aggregates API
+    const apiUrl = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/1/day/${startDate}/${endDate}?apiKey=${POLYGON_API_KEY}`;
     
-    // Add some random noise
-    const noise = (Math.random() - 0.5) * volatility * currentPrice * 0.5;
+    const response = await fetch(apiUrl);
+    const data = await response.json();
     
-    // Update price
-    currentPrice += movement + noise;
+    if (data.resultsCount === 0 || !data.results) {
+      console.log(`No Polygon data found for ${symbol}, falling back to generated data`);
+      return null;
+    }
     
-    // Ensure price doesn't go negative
-    currentPrice = Math.max(currentPrice, basePrice * 0.5);
+    // Format the data for our chart
+    return data.results.map(result => ({
+      date: new Date(result.t).toISOString().split('T')[0],
+      value: result.c // Using closing price
+    }));
+  } catch (error) {
+    console.error(`Error fetching Polygon data for ${symbol}:`, error);
+    return null;
+  }
+}
+
+// Generate random stock price data with realistic patterns and technical indicators
+export const createTestStockChart = async (symbol, timeframe = '1m', indicators = ['sma']) => {
+  // Try to fetch real data from Polygon API first
+  const polygonData = await fetchPolygonStockData(symbol, timeframe);
+  
+  let data;
+  if (polygonData) {
+    console.log(`Using real Polygon data for ${symbol}`);
+    data = [...polygonData]; // Clone the array
+  } else {
+    console.log(`Generating synthetic data for ${symbol}`);
+    // Define time period
+    const days = timeframe === '1w' ? 7 :
+                timeframe === '2w' ? 14 :
+                timeframe === '1m' ? 30 :
+                timeframe === '3m' ? 90 :
+                timeframe === '6m' ? 180 :
+                timeframe === '1y' ? 365 : 30;
     
+    // Set realistic starting values based on ticker
+    const basePrice = 
+      symbol === 'AAPL' ? 180 :
+      symbol === 'MSFT' ? 350 :
+      symbol === 'GOOGL' ? 140 :
+      symbol === 'AMZN' ? 160 :
+      symbol === 'META' ? 325 :
+      symbol === 'TSLA' ? 250 :
+      symbol === 'JPM' ? 170 :
+      symbol === 'V' ? 230 :
+      symbol === 'NVDA' ? 450 :
+      symbol === 'BAC' ? 35 :
+      symbol === 'BTC' || symbol === 'Bitcoin' ? 45000 :
+      symbol === 'ETH' || symbol === 'Ethereum' ? 3000 :
+      symbol === 'XRP' ? 0.5 :
+      symbol === 'ADA' ? 0.4 :
+      symbol === 'SOL' ? 100 :
+      symbol === 'DOT' ? 6 :
+      symbol === 'DOGE' ? 0.1 : 
+      100; // Default value
+    
+    // Generate volatility based on the asset
+    const volatility = 
+      symbol.includes('BTC') || symbol === 'Bitcoin' ? 0.03 :
+      symbol.includes('ETH') || symbol === 'Ethereum' ? 0.04 :
+      symbol === 'TSLA' ? 0.025 :
+      symbol === 'NVDA' ? 0.02 :
+      symbol === 'AAPL' || symbol === 'MSFT' ? 0.01 : 0.015;
+    
+    // Generate dates
+    const dates = [];
+    const prices = [];
+    const today = new Date();
+    
+    for (let i = days; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(today.getDate() - i);
+      dates.push(date.toISOString().split('T')[0]);
+    }
+    
+    // Generate semi-realistic price movements
+    // Start with base price
+    let currentPrice = basePrice;
     prices.push(currentPrice);
+    
+    // Add a trend bias (0.6 = 60% chance of following the trend)
+    const trendBias = 0.6;
+    let trend = Math.random() > 0.5 ? 1 : -1;
+    
+    // Generate subsequent prices with momentum and volatility
+    for (let i = 1; i <= days; i++) {
+      // 20% chance of trend reversal
+      if (Math.random() > 0.8) {
+        trend = -trend;
+      }
+      
+      // Calculate price movement with trend bias
+      const randomFactor = Math.random();
+      const movement = (randomFactor > trendBias ? -trend : trend) * volatility * currentPrice;
+      
+      // Add some random noise
+      const noise = (Math.random() - 0.5) * volatility * currentPrice * 0.5;
+      
+      // Update price
+      currentPrice += movement + noise;
+      
+      // Ensure price doesn't go negative
+      currentPrice = Math.max(currentPrice, basePrice * 0.5);
+      
+      prices.push(currentPrice);
+    }
+
+    // Format data for chart
+    data = dates.map((date, index) => ({
+      date,
+      value: parseFloat(prices[index].toFixed(2))
+    }));
   }
   
-  // Format data for chart
-  const data = dates.map((date, index) => ({
-    date,
-    value: parseFloat(prices[index].toFixed(2))
-  }));
+  // Extract prices for technical indicators
+  const prices = data.map(point => point.value);
+  
+  // Calculate technical indicators
+  const technicalIndicators = {};
+  
+  // Simple Moving Average (SMA)
+  if (indicators.includes('sma') || indicators.includes('all')) {
+    const smaPeriod = 7; // 7-day SMA
+    const smaValues = calculateSMA(prices, smaPeriod);
+    technicalIndicators.sma = smaValues;
+  }
+  
+  // Exponential Moving Average (EMA)
+  if (indicators.includes('ema') || indicators.includes('all')) {
+    const emaPeriod = 14; // 14-day EMA
+    const emaValues = calculateEMA(prices, emaPeriod);
+    technicalIndicators.ema = emaValues;
+  }
+  
+  // MACD (Moving Average Convergence Divergence)
+  if (indicators.includes('macd') || indicators.includes('all')) {
+    const macdValues = calculateMACD(prices);
+    technicalIndicators.macd = macdValues;
+  }
+  
+  // RSI (Relative Strength Index)
+  if (indicators.includes('rsi') || indicators.includes('all')) {
+    const rsiValues = calculateRSI(prices);
+    technicalIndicators.rsi = rsiValues;
+  }
+  
+  // Add technical indicators to data points
+  data = data.map((point, index) => {
+    // Add technical indicators to data points
+    if (technicalIndicators.sma && index >= technicalIndicators.sma.length - prices.length) {
+      const smaIndex = index - (prices.length - technicalIndicators.sma.length);
+      if (smaIndex >= 0) {
+        point.sma = parseFloat(technicalIndicators.sma[smaIndex].toFixed(2));
+      }
+    }
+    
+    if (technicalIndicators.ema && index >= technicalIndicators.ema.length - prices.length) {
+      const emaIndex = index - (prices.length - technicalIndicators.ema.length);
+      if (emaIndex >= 0) {
+        point.ema = parseFloat(technicalIndicators.ema[emaIndex].toFixed(2));
+      }
+    }
+    
+    if (technicalIndicators.macd && index >= technicalIndicators.macd.MACD.length - prices.length) {
+      const macdIndex = index - (prices.length - technicalIndicators.macd.MACD.length);
+      if (macdIndex >= 0) {
+        point.macd = parseFloat(technicalIndicators.macd.MACD[macdIndex].toFixed(2));
+        point.signal = parseFloat(technicalIndicators.macd.signal[macdIndex].toFixed(2));
+        point.histogram = parseFloat(technicalIndicators.macd.histogram[macdIndex].toFixed(2));
+      }
+    }
+    
+    if (technicalIndicators.rsi && index >= technicalIndicators.rsi.length - prices.length) {
+      const rsiIndex = index - (prices.length - technicalIndicators.rsi.length);
+      if (rsiIndex >= 0) {
+        point.rsi = parseFloat(technicalIndicators.rsi[rsiIndex].toFixed(2));
+      }
+    }
+    
+    return point;
+  });
+  
+  // Prepare the series configuration for the chart
+  const series = [
+    { name: symbol, dataKey: 'value' }
+  ];
+  
+  if (technicalIndicators.sma) {
+    series.push({ name: '7-Day SMA', dataKey: 'sma' });
+  }
+  
+  if (technicalIndicators.ema) {
+    series.push({ name: '14-Day EMA', dataKey: 'ema' });
+  }
   
   return {
     chartConfig: {
@@ -621,21 +767,27 @@ export const createTestStockChart = (symbol, timeframe = '1m') => {
       xKey: 'date',
       yKey: 'value',
       title: `${symbol} Price History (${timeframe.toUpperCase()})`
-    }
+    },
+    series: series,
+    technicalIndicators: Object.keys(technicalIndicators)
   };
 };
 
 // Create comparison chart data for multiple assets
-export const createTestComparisonChart = (symbols, timeframe = '1m') => {
-  // Define time period
-  const days = timeframe === '1w' ? 7 :
-               timeframe === '2w' ? 14 :
-               timeframe === '1m' ? 30 :
-               timeframe === '3m' ? 90 :
-               timeframe === '6m' ? 180 :
-               timeframe === '1y' ? 365 : 30;
+export const createTestComparisonChart = async (symbols, timeframe = '1m', withIndicators = false, useRawPrices = false) => {
+  // Fetch data for each symbol
+  const symbolsData = {};
+  const series = [];
   
-  // Generate dates
+  // Generate dates for the full timeframe (in case some symbols have missing days)
+  const days = timeframe === '1w' ? 7 :
+              timeframe === '2w' ? 14 :
+              timeframe === '1m' ? 30 :
+              timeframe === '3m' ? 90 :
+              timeframe === '6m' ? 180 :
+              timeframe === '1y' ? 365 : 30;
+  
+  // Generate date range to ensure complete dataset
   const dates = [];
   const today = new Date();
   
@@ -645,48 +797,202 @@ export const createTestComparisonChart = (symbols, timeframe = '1m') => {
     dates.push(date.toISOString().split('T')[0]);
   }
   
-  // Generate normalized price data for each symbol
-  const symbolsData = {};
-  const series = [];
-  
-  symbols.forEach(symbol => {
-    // Generate base data for this symbol
-    const baseChart = createTestStockChart(symbol, timeframe);
-    const priceData = baseChart.chartConfig.data.map(point => point.value);
+  // Fetch data for each symbol
+  for (const symbol of symbols) {
+    // Get chart data (real or synthetic)
+    const chart = await createTestStockChart(symbol, timeframe);
+    const priceData = chart.chartConfig.data;
     
-    // Normalize to percentage change from starting value
-    const startValue = priceData[0];
-    const normalizedData = priceData.map(price => (price / startValue) * 100);
-    
-    // Store normalized values
-    symbolsData[symbol] = normalizedData;
+    // Store either raw price data or normalized data depending on mode
+    if (useRawPrices) {
+      // Use raw price data for direct price comparison
+      symbolsData[symbol] = {
+        data: priceData,
+        sma: withIndicators ? calculateSMA(priceData.map(p => p.value), 7) : null
+      };
+    } else {
+      // Normalize to percentage change from starting value for fair comparison
+      const startValue = priceData[0].value;
+      const normalizedData = priceData.map(point => ({
+        date: point.date,
+        value: (point.value / startValue) * 100
+      }));
+      
+      symbolsData[symbol] = {
+        data: normalizedData,
+        sma: withIndicators ? calculateSMA(normalizedData.map(p => p.value), 7) : null
+      };
+    }
     
     // Add to series config
     series.push({
       name: symbol,
       dataKey: symbol
     });
+    
+    if (withIndicators) {
+      series.push({
+        name: `${symbol} 7D-SMA`,
+        dataKey: `${symbol}_sma`,
+        stroke: 'rgba(150,150,150,0.8)', // Muted color for indicators
+        strokeDasharray: '3 3' // Dashed line
+      });
+    }
+  }
+  
+  // Combine into a single dataset with aligned dates
+  const combinedData = dates.map(date => ({ date }));
+  
+  // Populate data for each symbol
+  for (let i = 0; i < combinedData.length; i++) {
+    const currentDate = combinedData[i].date;
+    
+    symbols.forEach(symbol => {
+      // Find matching date in symbol data
+      const matchingPoint = symbolsData[symbol].data.find(point => point.date === currentDate);
+      
+      if (matchingPoint) {
+        combinedData[i][symbol] = matchingPoint.value;
+        
+        // Add SMA if available
+        if (withIndicators && symbolsData[symbol].sma) {
+          const smaIndex = symbolsData[symbol].data.findIndex(point => point.date === currentDate);
+          const smaOffset = symbolsData[symbol].data.length - symbolsData[symbol].sma.length;
+          
+          if (smaIndex >= smaOffset) {
+            combinedData[i][`${symbol}_sma`] = symbolsData[symbol].sma[smaIndex - smaOffset];
+          }
+        }
+      } else {
+        // Interpolate missing data
+        combinedData[i][symbol] = null; // Chart component will handle null values
+      }
+    });
+  }
+  
+  // Remove data points where all symbols have null values
+  const filteredData = combinedData.filter(point => {
+    return symbols.some(symbol => point[symbol] !== null);
   });
   
-  // Combine into a single dataset
-  const data = dates.map((date, index) => {
-    const dataPoint = { date };
-    symbols.forEach(symbol => {
-      dataPoint[symbol] = parseFloat(symbolsData[symbol][index].toFixed(2));
-    });
-    return dataPoint;
-  });
+  // Create title based on comparison type
+  const metricType = useRawPrices ? "Price" : "Percentage Change (Base: 100%)";
+  const title = useRawPrices 
+    ? `Price Comparison: ${symbols.join(' vs ')} (${timeframe.toUpperCase()})`
+    : `Performance Comparison: ${symbols.join(' vs ')} (${timeframe.toUpperCase()})`;
   
   return {
     chartConfig: {
       type: 'comparison',
-      data: data,
+      data: filteredData,
       xKey: 'date',
-      title: `Performance Comparison (${timeframe.toUpperCase()})`
+      title: title,
+      metricType: metricType
     },
-    series: series
+    series: series,
+    withIndicators: withIndicators,
+    useRawPrices: useRawPrices
   };
 };
+
+// Technical indicator calculation functions
+
+// Calculate Simple Moving Average (SMA)
+function calculateSMA(prices, period) {
+  const sma = [];
+  for (let i = period - 1; i < prices.length; i++) {
+    const sum = prices.slice(i - (period - 1), i + 1).reduce((a, b) => a + b, 0);
+    sma.push(sum / period);
+  }
+  return sma;
+}
+
+// Calculate Exponential Moving Average (EMA)
+function calculateEMA(prices, period) {
+  const k = 2 / (period + 1);
+  const ema = [prices[0]]; // Initialize with the first price
+  
+  for (let i = 1; i < prices.length; i++) {
+    ema.push(prices[i] * k + ema[i - 1] * (1 - k));
+  }
+  
+  return ema;
+}
+
+// Calculate MACD (Moving Average Convergence Divergence)
+function calculateMACD(prices, fastPeriod = 12, slowPeriod = 26, signalPeriod = 9) {
+  const fastEMA = calculateEMA(prices, fastPeriod);
+  const slowEMA = calculateEMA(prices, slowPeriod);
+  
+  // MACD Line = Fast EMA - Slow EMA
+  const macdLine = [];
+  for (let i = 0; i < prices.length; i++) {
+    if (i < slowPeriod - 1) {
+      // Not enough data for slow EMA yet
+      macdLine.push(0);
+    } else {
+      macdLine.push(fastEMA[i] - slowEMA[i]);
+    }
+  }
+  
+  // Signal Line = 9-day EMA of MACD Line
+  const validMacd = macdLine.slice(slowPeriod - 1);
+  const signalLine = calculateEMA(validMacd, signalPeriod);
+  
+  // Pad signal line to match the original array length
+  const paddedSignalLine = Array(slowPeriod + signalPeriod - 2).fill(0).concat(signalLine);
+  
+  // MACD Histogram = MACD Line - Signal Line
+  const histogram = [];
+  for (let i = 0; i < macdLine.length; i++) {
+    if (i < slowPeriod + signalPeriod - 2) {
+      histogram.push(0);
+    } else {
+      histogram.push(macdLine[i] - paddedSignalLine[i]);
+    }
+  }
+  
+  return {
+    MACD: macdLine,
+    signal: paddedSignalLine,
+    histogram: histogram
+  };
+}
+
+// Calculate Relative Strength Index (RSI)
+function calculateRSI(prices, period = 14) {
+  if (prices.length <= period) {
+    return Array(prices.length).fill(50); // Default to 50 if not enough data
+  }
+  
+  const gains = [];
+  const losses = [];
+  
+  // Calculate price changes
+  for (let i = 1; i < prices.length; i++) {
+    const change = prices[i] - prices[i - 1];
+    gains.push(change > 0 ? change : 0);
+    losses.push(change < 0 ? Math.abs(change) : 0);
+  }
+  
+  // Calculate initial averages
+  let avgGain = gains.slice(0, period).reduce((sum, value) => sum + value, 0) / period;
+  let avgLoss = losses.slice(0, period).reduce((sum, value) => sum + value, 0) / period;
+  
+  const rsi = [100 - (100 / (1 + avgGain / (avgLoss === 0 ? 0.001 : avgLoss)))];
+  
+  // Calculate RSI for remaining periods
+  for (let i = period; i < prices.length - 1; i++) {
+    avgGain = ((avgGain * (period - 1)) + gains[i]) / period;
+    avgLoss = ((avgLoss * (period - 1)) + losses[i]) / period;
+    
+    const rs = avgGain / (avgLoss === 0 ? 0.001 : avgLoss); // Avoid division by zero
+    rsi.push(100 - (100 / (1 + rs)));
+  }
+  
+  // Pad with initial values to match prices length
+  return Array(period).fill(50).concat(rsi);
+}
 
 // Create a sample pie chart for portfolio allocation
 export const createPortfolioAllocationChart = (positions) => {

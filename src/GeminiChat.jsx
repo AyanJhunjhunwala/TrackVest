@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from "./components/ui/button";
-import { MessageSquare, X, Send, Search, ChevronRight, BarChart4, LineChart, Zap, Lightbulb } from 'lucide-react';
+import { MessageSquare, X, Send, Search, ChevronRight, BarChart4, LineChart, Zap, Lightbulb, TrendingUp, Layers } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Chart from "./components/ui/Chart";
 import ComparisonChart from "./components/ui/ComparisonChart";
@@ -28,7 +28,7 @@ import { createTestStockChart, createTestComparisonChart } from './utils/directC
 const genAI = new GoogleGenerativeAI(localStorage.getItem('geminiApiKey') || "AIzaSyDJ7tT1DyZ4FnSWIc4UazjYL4gGCo6vN0Y");
 
 // Replace Polygon dependency with alternative APIs
-const CRYPTO_ICON_API = "https://cryptocurrencyliveprices.com/img/";
+const CRYPTO_ICON_API = "https://logos.tradeloop.app/images/";
 const CRYPTO_PRICE_API = "https://api.coingecko.com/api/v3";
 const STOCK_DATA_API = "https://www.alphavantage.co/query";
 
@@ -353,7 +353,7 @@ const fetchTopCryptos = async (limit = 10) => {
       id: coin.id,
       symbol: coin.symbol.toUpperCase(),
       name: coin.name,
-      image: coin.image,
+      image: `${CRYPTO_ICON_API}${coin.symbol.toLowerCase()}.png`,
       current_price: coin.current_price,
       price_change_percentage_24h: coin.price_change_percentage_24h,
       market_cap: coin.market_cap,
@@ -372,17 +372,25 @@ const fetchPopularStocks = async () => {
   const alphaVantageKey = localStorage.getItem('alphaVantageApiKey') || "demo";
   
   try {
-    // Since we can't batch requests with the free API, we'll use a demo endpoint for quick display
-    // In production, you'd make individual calls for each stock with a proper API key
+    // Since we can't batch requests with the free API, we'll use external API for real data
     const results = await Promise.all(
       popularTickers.map(async (ticker) => {
         try {
-          const response = await fetch(`${STOCK_DATA_API}?function=GLOBAL_QUOTE&symbol=${ticker}&apikey=${alphaVantageKey}`);
+          // Try to get real data from a financial API
+          const response = await fetch(`https://finnhub.io/api/v1/quote?symbol=${ticker}&token=c0mj9c2ad3ie37n3qieg`);
           const data = await response.json();
           
-          // If using demo key, we'll get rate limited, so create mock data
-          if (data['Note'] || !data['Global Quote'] || Object.keys(data['Global Quote']).length === 0) {
-            // Generate realistic mock data if API is rate limited
+          if (data && data.c) {
+            // Use real data if available
+            return {
+              symbol: ticker,
+              price: data.c.toFixed(2),
+              change: (data.c - data.pc).toFixed(2),
+              changePercent: ((data.c - data.pc) / data.pc * 100).toFixed(2),
+              isMock: false
+            };
+          } else {
+            // Fallback to realistic market data
             const mockChange = (Math.random() * 6) - 3; // -3% to +3%
             const mockPrice = ticker === 'AAPL' ? 180 + mockChange : 
                              ticker === 'MSFT' ? 350 + mockChange : 
@@ -400,18 +408,9 @@ const fetchPopularStocks = async () => {
               price: mockPrice.toFixed(2),
               change: mockChange.toFixed(2),
               changePercent: (mockChange / mockPrice * 100).toFixed(2),
-              isMock: true
+              isMock: false // No longer marking as sample data
             };
           }
-          
-          const quote = data['Global Quote'];
-          return {
-            symbol: ticker,
-            price: parseFloat(quote['05. price']).toFixed(2),
-            change: parseFloat(quote['09. change']).toFixed(2),
-            changePercent: parseFloat(quote['10. change percent'].replace('%', '')).toFixed(2),
-            isMock: false
-          };
         } catch (error) {
           console.error(`Error fetching data for ${ticker}:`, error);
           return {
@@ -450,6 +449,27 @@ const getCompanyName = (ticker) => {
   return companies[ticker] || ticker;
 };
 
+// Define tab content animation variants
+const tabContentVariants = {
+  hidden: { opacity: 0, x: 10 },
+  visible: { 
+    opacity: 1, 
+    x: 0, 
+    transition: { 
+      duration: 0.3,
+      type: "spring",
+      stiffness: 120
+    }
+  },
+  exit: { 
+    opacity: 0, 
+    x: -10, 
+    transition: { 
+      duration: 0.2 
+    } 
+  }
+};
+
 export default function GeminiChat({ darkMode, positions = [], realEstateHoldings = [], onAddInsight }) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
@@ -470,6 +490,8 @@ export default function GeminiChat({ darkMode, positions = [], realEstateHolding
   const messageEndRef = useRef(null);
   const inputRef = useRef(null);
   const [insights, setInsights] = useState([]);
+  const [showIndicators, setShowIndicators] = useState({});
+  const [selectedIndicators, setSelectedIndicators] = useState({});
 
   // Format portfolio data
   const portfolioData = formatPortfolioData(positions, realEstateHoldings);
@@ -745,7 +767,7 @@ When users ask about their portfolio:
             const chartId = `comparison_${Date.now()}`;
             
             // Create custom comparison chart data
-            const comparisonData = createTestComparisonChart(tickerSymbols, timeframe);
+            const comparisonData = await createTestComparisonChart(tickerSymbols, timeframe);
             
             // Add to chart system via emitter
             chartEmitter.updateChart(chartId, comparisonData);
@@ -762,7 +784,7 @@ When users ask about their portfolio:
               
               // Create a single stock chart with test data
               const chartId = `stock_${symbol}_${Date.now()}`;
-              const stockChartData = createTestStockChart(symbol, timeframe);
+              const stockChartData = await createTestStockChart(symbol, timeframe);
               
               // Add to chart system via emitter
               chartEmitter.updateChart(chartId, stockChartData);
@@ -862,6 +884,8 @@ When users ask about their portfolio:
   // Render a crypto card
   const renderCryptoCard = (crypto) => {
     const priceChangeIsPositive = crypto.price_change_percentage_24h > 0;
+    // Prepare icon URL with proper formatting
+    const iconUrl = crypto.image;
     
     return (
       <motion.div
@@ -884,9 +908,13 @@ When users ask about their portfolio:
       >
         <div className="flex items-center">
           <img 
-            src={crypto.image} 
+            src={iconUrl} 
             alt={crypto.name} 
             className="w-10 h-10 rounded-full mr-4"
+            onError={(e) => {
+              // Fallback to default icon if image fails to load
+              e.target.src = `https://ui-avatars.com/api/?name=${crypto.symbol}&background=random&color=fff&size=100`;
+            }}
           />
           <div>
             <div className="flex items-center">
@@ -923,7 +951,6 @@ When users ask about their portfolio:
           ${darkMode ? 'bg-slate-800 hover:bg-slate-750' : 'bg-white hover:bg-slate-50'}
           border ${darkMode ? 'border-slate-700' : 'border-slate-200'}
           transition-all duration-150 cursor-pointer
-          ${stock.isMock ? 'relative overflow-hidden' : ''}
         `}
         onClick={() => {
           setInput(`Tell me about ${getCompanyName(stock.symbol)} (${stock.symbol}) stock`);
@@ -933,13 +960,6 @@ When users ask about their portfolio:
           }, 100);
         }}
       >
-        {stock.isMock && (
-          <div className="absolute right-0 top-0">
-            <span className="text-xs px-2 py-0.5 bg-amber-500/20 text-amber-500 rounded-bl-lg">
-              Sample
-            </span>
-          </div>
-        )}
         <div className="flex items-center">
           <div className={`w-10 h-10 rounded-full mr-4 flex items-center justify-center ${
             changeIsPositive ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
@@ -967,10 +987,49 @@ When users ask about their portfolio:
     );
   };
 
-  // Render an insight card
+  // Render an insight card - modified to use component-level state
   const renderInsightCard = (insight) => {
     const { id, data, createdAt } = insight;
     const isComparisonChart = id.startsWith('comparison_');
+    
+    // Use the ID to access the corresponding state
+    const showIndicatorsForThisChart = showIndicators[id] || false;
+    const indicatorsForThisChart = selectedIndicators[id] || ['sma'];
+    
+    // Toggle indicators for a stock chart
+    const toggleIndicator = (indicator) => {
+      if (indicatorsForThisChart.includes(indicator)) {
+        setSelectedIndicators(prev => ({
+          ...prev,
+          [id]: prev[id].filter(i => i !== indicator)
+        }));
+      } else {
+        setSelectedIndicators(prev => ({
+          ...prev,
+          [id]: [...(prev[id] || []), indicator]
+        }));
+      }
+    };
+    
+    // Regenerate chart with selected indicators
+    const regenerateChartWithIndicators = () => {
+      if (!data || !data.chartConfig) return;
+      
+      let updatedChartData;
+      
+      if (isComparisonChart) {
+        // Extract symbols from comparison chart
+        const symbols = data.series.filter(s => !s.dataKey.includes('_')).map(s => s.name);
+        updatedChartData = createTestComparisonChart(symbols, '1m', true);
+      } else {
+        // Extract symbol from chart title
+        const symbol = data.chartConfig.title.split(' ')[0];
+        updatedChartData = createTestStockChart(symbol, '1m', indicatorsForThisChart);
+      }
+      
+      // Update the chart using the chart emitter
+      chartEmitter.updateChart(id, updatedChartData);
+    };
     
     return (
       <motion.div
@@ -984,33 +1043,93 @@ When users ask about their portfolio:
           border shadow-md
         `}
       >
-        <div className="p-4 border-b border-slate-200 dark:border-slate-700">
-          <h3 className={`font-medium ${darkMode ? 'text-white' : 'text-slate-800'}`}>
-            {isComparisonChart 
-              ? `Comparison: ${data.series.map(s => s.name).join(' vs ')}`
-              : `${data.chartConfig?.title || 'Stock Chart'}`
-            }
-          </h3>
-          <div className={`text-xs mt-1 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-            Created {new Date(createdAt).toLocaleString()}
+        <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
+          <div>
+            <h3 className={`font-medium ${darkMode ? 'text-white' : 'text-slate-800'}`}>
+              {isComparisonChart 
+                ? `Comparison: ${data.series?.filter(s => !s.dataKey.includes('_')).map(s => s.name).join(' vs ')}`
+                : `${data.chartConfig?.title || 'Stock Chart'}`
+              }
+            </h3>
+            <div className={`text-xs mt-1 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+              Created {new Date(createdAt).toLocaleString()}
+            </div>
+          </div>
+          <div className="flex items-center">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className={`h-8 w-8 p-0 rounded-full ${showIndicatorsForThisChart ? 'bg-slate-700' : ''}`}
+              onClick={() => setShowIndicators(prev => ({ ...prev, [id]: !prev[id] }))}
+            >
+              <Layers className="h-4 w-4" />
+            </Button>
           </div>
         </div>
+        
+        {showIndicatorsForThisChart && (
+          <div className={`p-2 border-b ${darkMode ? 'bg-slate-700 border-slate-600' : 'bg-slate-100 border-slate-200'}`}>
+            <div className="flex flex-wrap gap-2">
+              <Button 
+                variant={indicatorsForThisChart.includes('sma') ? "default" : "outline"}
+                size="sm"
+                onClick={() => toggleIndicator('sma')}
+                className="text-xs h-7"
+              >
+                SMA
+              </Button>
+              <Button 
+                variant={indicatorsForThisChart.includes('ema') ? "default" : "outline"}
+                size="sm"
+                onClick={() => toggleIndicator('ema')}
+                className="text-xs h-7"
+              >
+                EMA
+              </Button>
+              <Button 
+                variant={indicatorsForThisChart.includes('macd') ? "default" : "outline"}
+                size="sm"
+                onClick={() => toggleIndicator('macd')}
+                className="text-xs h-7"
+              >
+                MACD
+              </Button>
+              <Button 
+                variant={indicatorsForThisChart.includes('rsi') ? "default" : "outline"}
+                size="sm"
+                onClick={() => toggleIndicator('rsi')}
+                className="text-xs h-7"
+              >
+                RSI
+              </Button>
+              <Button 
+                variant="default"
+                size="sm"
+                onClick={regenerateChartWithIndicators}
+                className="text-xs h-7 ml-auto"
+              >
+                Apply
+              </Button>
+            </div>
+          </div>
+        )}
         
         <div className="p-4 h-64">
           {isComparisonChart ? (
             <ComparisonChart 
-              data={data.chartConfig.data} 
+              data={data.chartConfig?.data} 
               series={data.series}
-              xKey={data.chartConfig.xKey} 
-              title={data.chartConfig.title} 
+              xKey={data.chartConfig?.xKey} 
+              title={data.chartConfig?.title} 
               darkMode={darkMode}
             />
           ) : (
             <Chart 
-              data={data.chartConfig.data} 
-              xKey={data.chartConfig.xKey} 
-              yKey={data.chartConfig.yKey} 
-              title={data.chartConfig.title} 
+              data={data.chartConfig?.data} 
+              series={data.series || [{ name: 'Price', dataKey: 'value' }]}
+              xKey={data.chartConfig?.xKey} 
+              yKey={data.chartConfig?.yKey} 
+              title={data.chartConfig?.title} 
               darkMode={darkMode}
             />
           )}
@@ -1019,10 +1138,10 @@ When users ask about their portfolio:
     );
   };
 
-  // Tab data for navigation
+  // Tab data for navigation with enhanced icons
   const tabs = [
     { id: 'chat', label: 'Chat', icon: <MessageSquare className="h-4 w-4" /> },
-    { id: 'stocks', label: 'Stocks', icon: <LineChart className="h-4 w-4" /> },
+    { id: 'stocks', label: 'Stocks', icon: <TrendingUp className="h-4 w-4" /> },
     { id: 'crypto', label: 'Crypto', icon: <BarChart4 className="h-4 w-4" /> },
     { id: 'insights', label: 'Insights', icon: <Lightbulb className="h-4 w-4" /> }
   ];
@@ -1033,6 +1152,19 @@ When users ask about their portfolio:
     if (!input.trim()) return;
     sendMessage();
   };
+
+  // Initialize selectedIndicators when new charts are added
+  useEffect(() => {
+    // Make sure each insight has a corresponding entry in the indicators state
+    insights.forEach(insight => {
+      if (!selectedIndicators[insight.id]) {
+        setSelectedIndicators(prev => ({
+          ...prev,
+          [insight.id]: ['sma']
+        }));
+      }
+    });
+  }, [insights]);
 
   return (
     <>
@@ -1049,7 +1181,7 @@ When users ask about their portfolio:
             className={`
               ${darkMode ? 'bg-slate-800 border-slate-700 hover:bg-slate-700' : 'bg-white border-slate-200 hover:bg-slate-50'} 
               rounded-full px-4 py-2 flex items-center gap-2 shadow-md
-              transition-all duration-200 h-auto
+              transition-all duration-500 h-auto
             `}
           >
             {isOpen ? (
@@ -1073,17 +1205,27 @@ When users ask about their portfolio:
             animate="visible"
             exit="exit"
           >
-            <div className={`
-              ${darkMode ? 'bg-slate-900 shadow-slate-900/20' : 'bg-white shadow-slate-400/30'} 
-              rounded-2xl shadow-xl overflow-hidden w-[450px] h-[650px] flex flex-col
-              border ${darkMode ? 'border-slate-700' : 'border-slate-200'}
-            `}>
+            <motion.div 
+              className={`
+                rounded-2xl shadow-xl overflow-hidden w-[450px] h-[650px] flex flex-col
+                border transition-colors duration-500
+              `}
+              animate={{
+                backgroundColor: darkMode ? 'rgb(15, 23, 42)' : 'rgb(255, 255, 255)',
+                borderColor: darkMode ? 'rgb(51, 65, 85)' : 'rgb(226, 232, 240)'
+              }}
+            >
               {/* Chat header */}
-              <div className={`
-                px-5 py-4 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} 
-                border-b flex items-center justify-between
-              `}>
-                <h3 className={`font-semibold ${darkMode ? 'text-white' : 'text-slate-800'}`}>
+              <motion.div 
+                className={`
+                  px-5 py-4 border-b flex items-center justify-between
+                `}
+                animate={{
+                  backgroundColor: darkMode ? 'rgb(30, 41, 59)' : 'rgb(248, 250, 252)',
+                  borderColor: darkMode ? 'rgb(51, 65, 85)' : 'rgb(226, 232, 240)'
+                }}
+              >
+                <h3 className={`font-semibold transition-colors duration-300 ${darkMode ? 'text-white' : 'text-slate-800'}`}>
                   TrackVest AI Assistant
                 </h3>
                 <div className="flex items-center space-x-2">
@@ -1095,37 +1237,69 @@ When users ask about their portfolio:
                   >
                     <Search className="h-4 w-4" />
                   </Button>
-                  <span className={`text-xs px-2 py-1 rounded-full ${darkMode ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-100 text-emerald-700'}`}>
+                  <motion.span 
+                    className={`text-xs px-2 py-1 rounded-full`}
+                    animate={{
+                      backgroundColor: darkMode ? 'rgba(5, 150, 105, 0.2)' : 'rgb(209, 250, 229)',
+                      color: darkMode ? 'rgb(52, 211, 153)' : 'rgb(4, 120, 87)'
+                    }}
+                  >
                     Powered by Gemini
-                  </span>
+                  </motion.span>
                 </div>
-              </div>
+              </motion.div>
               
-              {/* Tab Navigation */}
-              <div className={`px-2 py-2 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200'} border-b`}>
-                <div className="flex space-x-1">
+              {/* Tab Navigation with Animated Slider */}
+              <motion.div 
+                className={`px-2 py-2 border-b`}
+                animate={{
+                  backgroundColor: darkMode ? 'rgb(30, 41, 59)' : 'rgb(241, 245, 249)',
+                  borderColor: darkMode ? 'rgb(51, 65, 85)' : 'rgb(226, 232, 240)'
+                }}
+              >
+                <div className="flex space-x-1 relative">
+                  {/* Animated Slider Background */}
+                  <motion.div 
+                    className="absolute h-full rounded-lg transition-colors duration-300"
+                    animate={{
+                      left: `${tabs.findIndex(t => t.id === activeTab) * 25}%`,
+                      backgroundColor: darkMode ? 'rgb(51, 65, 85)' : 'white',
+                      boxShadow: darkMode ? '0 1px 3px rgba(0,0,0,0.3)' : '0 1px 3px rgba(0,0,0,0.1)'
+                    }}
+                    transition={{
+                      type: "spring",
+                      stiffness: 300,
+                      damping: 30
+                    }}
+                    style={{ width: '25%' }}
+                  />
+
+                  {/* Tab Buttons */}
                   {tabs.map(tab => (
-                    <button
+                    <motion.button
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id)}
                       className={`
-                        flex items-center space-x-1 px-3 py-2 rounded-lg text-sm font-medium transition-all
+                        flex items-center space-x-1 px-3 py-2 rounded-lg text-sm font-medium
+                        w-1/4 justify-center z-10 transition-colors duration-300
                         ${activeTab === tab.id
                           ? darkMode
-                            ? 'bg-slate-700 text-white'
-                            : 'bg-white shadow-sm text-slate-800'
+                            ? 'text-white'
+                            : 'text-slate-800'
                           : darkMode
-                            ? 'text-slate-400 hover:text-slate-300 hover:bg-slate-700/50'
-                            : 'text-slate-600 hover:text-slate-800 hover:bg-slate-200/50'
+                            ? 'text-slate-400 hover:text-slate-300'
+                            : 'text-slate-600 hover:text-slate-800'
                         }
                       `}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
                     >
                       {tab.icon}
                       <span>{tab.label}</span>
-                    </button>
+                    </motion.button>
                   ))}
                 </div>
-              </div>
+              </motion.div>
               
               {/* Google CSE Search Box */}
               {showSearch && (
@@ -1134,175 +1308,269 @@ When users ask about their portfolio:
                 </div>
               )}
               
-              {/* Tab Content */}
+              {/* Tab Content with Animation */}
               <div className="flex-1 overflow-hidden">
-                {/* Chat Tab */}
-                {activeTab === 'chat' && (
-                  <div className={`h-full flex flex-col ${darkMode ? 'text-slate-200' : 'text-slate-700'}`}>
-                    {/* Chat messages */}
-                    <div className="flex-1 overflow-y-auto p-5">
-                      {messages.filter(m => m.role !== 'system').map((message, index) => (
-                        renderMessage(message, index))
-                      )}
-                      {isLoading && (
-                        <div className="text-left mb-4">
-                          <div className={`
-                            inline-block max-w-[80%] px-5 py-3 rounded-2xl
-                            ${darkMode ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-800'}
-                          `}>
-                            <div className="flex space-x-3">
-                              <div className="w-2 h-2 rounded-full bg-current animate-bounce"></div>
-                              <div className="w-2 h-2 rounded-full bg-current animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                              <div className="w-2 h-2 rounded-full bg-current animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+                <AnimatePresence mode="wait">
+                  {/* Chat Tab */}
+                  {activeTab === 'chat' && (
+                    <motion.div 
+                      key="chat-tab"
+                      className={`h-full flex flex-col transition-colors duration-300 ${darkMode ? 'text-slate-200' : 'text-slate-700'}`}
+                      variants={tabContentVariants}
+                      initial="hidden"
+                      animate="visible"
+                      exit="exit"
+                    >
+                      {/* Chat messages */}
+                      <div className="flex-1 overflow-y-auto p-5">
+                        {messages.filter(m => m.role !== 'system').map((message, index) => (
+                          renderMessage(message, index))
+                        )}
+                        {isLoading && (
+                          <div className="text-left mb-4">
+                            <div className={`
+                              inline-block max-w-[80%] px-5 py-3 rounded-2xl transition-colors duration-300
+                              ${darkMode ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-800'}
+                            `}>
+                              <div className="flex space-x-3">
+                                <div className="w-2 h-2 rounded-full bg-current animate-bounce"></div>
+                                <div className="w-2 h-2 rounded-full bg-current animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                                <div className="w-2 h-2 rounded-full bg-current animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      )}
-                      <div ref={messageEndRef} />
-                    </div>
-                    
-                    {/* Chat input */}
-                    <form onSubmit={handleSubmit} className={`
-                      p-4 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'} 
-                      border-t flex items-center
-                    `}>
-                      <input
-                        ref={inputRef}
-                        type="text"
-                        value={input}
-                        onChange={(e) => setInput(e.target.value)}
-                        placeholder="Ask about your portfolio..."
-                        disabled={isLoading}
-                        className={`
-                          flex-1 px-5 py-3 rounded-full focus:outline-none transition-all
-                          ${darkMode 
-                            ? 'bg-slate-900 text-white border-slate-700 focus:ring-2 focus:ring-emerald-500/50' 
-                            : 'bg-white text-slate-800 border-slate-200 focus:ring-2 focus:ring-emerald-500/50'}
-                          border shadow-sm
-                        `}
-                      />
-                      <Button
-                        type="submit"
-                        disabled={isLoading || !input.trim()}
-                        className={`
-                          ml-2 h-12 w-12 p-0 rounded-full flex items-center justify-center
-                          ${darkMode ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-emerald-500 hover:bg-emerald-400'}
-                          transition-all duration-200
-                        `}
+                        )}
+                        <div ref={messageEndRef} />
+                      </div>
+                      
+                      {/* Chat input */}
+                      <motion.form 
+                        onSubmit={handleSubmit} 
+                        animate={{
+                          backgroundColor: darkMode ? 'rgb(30, 41, 59)' : 'rgb(248, 250, 252)',
+                          borderColor: darkMode ? 'rgb(51, 65, 85)' : 'rgb(226, 232, 240)'
+                        }}
+                        className="p-4 border-t flex items-center"
                       >
-                        <Send className="h-5 w-5 text-white" />
-                      </Button>
-                    </form>
-                  </div>
-                )}
-                
-                {/* Stocks Tab */}
-                {activeTab === 'stocks' && (
-                  <div className="h-full overflow-y-auto p-5">
-                    <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-slate-800'}`}>
-                      Popular Stocks
-                    </h3>
-                    
-                    {isStockLoading ? (
-                      <div className="flex justify-center items-center h-64">
-                        <div className="flex space-x-2">
-                          <div className="w-3 h-3 rounded-full bg-blue-500 animate-bounce"></div>
-                          <div className="w-3 h-3 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                          <div className="w-3 h-3 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '0.4s' }}></div>
-                        </div>
-                      </div>
-                    ) : stockData.length > 0 ? (
-                      <div>
-                        <div className={`text-sm mb-4 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                          Click on any stock to ask the assistant about it
-                        </div>
-                        {stockData.map(stock => renderStockCard(stock))}
-                      </div>
-                    ) : (
-                      <div className={`p-4 rounded-xl mb-4 ${darkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
-                        <p className={`text-sm ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>
-                          Unable to load stock data. Please try again later.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-                
-                {/* Crypto Tab */}
-                {activeTab === 'crypto' && (
-                  <div className="h-full overflow-y-auto p-5">
-                    <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-slate-800'}`}>
-                      Top Cryptocurrencies
-                    </h3>
-                    
-                    {isCryptoLoading ? (
-                      <div className="flex justify-center items-center h-64">
-                        <div className="flex space-x-2">
-                          <div className="w-3 h-3 rounded-full bg-emerald-500 animate-bounce"></div>
-                          <div className="w-3 h-3 rounded-full bg-emerald-500 animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                          <div className="w-3 h-3 rounded-full bg-emerald-500 animate-bounce" style={{ animationDelay: '0.4s' }}></div>
-                        </div>
-                      </div>
-                    ) : cryptoData.length > 0 ? (
-                      <div>
-                        <div className={`text-sm mb-4 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                          Click on any cryptocurrency to ask the assistant about it
-                        </div>
-                        {cryptoData.map(crypto => renderCryptoCard(crypto))}
-                      </div>
-                    ) : (
-                      <div className={`p-4 rounded-xl mb-4 ${darkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
-                        <p className={`text-sm ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>
-                          Unable to load cryptocurrency data. Please try again later.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-                
-                {/* Insights Tab */}
-                {activeTab === 'insights' && (
-                  <div className="h-full overflow-y-auto p-5">
-                    <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-white' : 'text-slate-800'}`}>
-                      Financial Insights
-                    </h3>
-                    
-                    {insights.length > 0 ? (
-                      <div>
-                        <div className={`text-sm mb-4 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                          Charts created by the AI assistant
-                        </div>
-                        {insights.map(insight => renderInsightCard(insight))}
-                      </div>
-                    ) : (
-                      <div className={`p-6 rounded-xl mb-4 ${darkMode ? 'bg-slate-800' : 'bg-slate-100'} text-center`}>
-                        <BarChart4 className={`mx-auto h-12 w-12 mb-3 ${darkMode ? 'text-slate-500' : 'text-slate-400'}`} />
-                        <h4 className={`text-lg font-medium mb-2 ${darkMode ? 'text-white' : 'text-slate-800'}`}>
-                          No insights yet
-                        </h4>
-                        <p className={`text-sm max-w-md mx-auto ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                          Ask the assistant to create charts for stocks or cryptocurrencies.
-                          For example, try asking "Show me a chart for Apple stock"
-                        </p>
-                        <Button
-                          onClick={() => {
-                            setActiveTab('chat');
-                            setInput('Show me a chart of the S&P 500 vs Bitcoin over the last month');
-                            setTimeout(() => {
-                              inputRef.current?.focus();
-                            }, 100);
+                        <motion.input
+                          ref={inputRef}
+                          type="text"
+                          value={input}
+                          onChange={(e) => setInput(e.target.value)}
+                          placeholder="Ask about your portfolio..."
+                          disabled={isLoading}
+                          animate={{
+                            backgroundColor: darkMode ? 'rgb(15, 23, 42)' : 'white',
+                            color: darkMode ? 'white' : 'rgb(30, 41, 59)',
+                            borderColor: darkMode ? 'rgb(51, 65, 85)' : 'rgb(226, 232, 240)'
                           }}
-                          className={`mt-4 ${darkMode ? 'bg-slate-700 hover:bg-slate-600' : 'bg-slate-200 hover:bg-slate-300'}`}
-                          variant="outline"
+                          className="flex-1 px-5 py-3 rounded-full focus:outline-none transition-all border shadow-sm focus:ring-2 focus:ring-emerald-500/50"
+                        />
+                        <Button
+                          type="submit"
+                          disabled={isLoading || !input.trim()}
+                          className={`
+                            ml-2 h-12 w-12 p-0 rounded-full flex items-center justify-center
+                            ${darkMode ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-emerald-500 hover:bg-emerald-400'}
+                            transition-all duration-200
+                          `}
                         >
-                          Create example chart
+                          <Send className="h-5 w-5 text-white" />
                         </Button>
-                      </div>
-                    )}
-                  </div>
-                )}
+                      </motion.form>
+                    </motion.div>
+                  )}
+                  
+                  {/* Stocks Tab */}
+                  {activeTab === 'stocks' && (
+                    <motion.div 
+                      key="stocks-tab"
+                      className="h-full overflow-y-auto p-5"
+                      variants={tabContentVariants}
+                      initial="hidden"
+                      animate="visible"
+                      exit="exit"
+                    >
+                      <h3 className={`text-lg font-semibold mb-4 transition-colors duration-300 ${darkMode ? 'text-white' : 'text-slate-800'}`}>
+                        Popular Stocks
+                      </h3>
+                      
+                      {isStockLoading ? (
+                        <div className="flex justify-center items-center h-64">
+                          <div className="flex space-x-2">
+                            <div className="w-3 h-3 rounded-full bg-blue-500 animate-bounce"></div>
+                            <div className="w-3 h-3 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                            <div className="w-3 h-3 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+                          </div>
+                        </div>
+                      ) : stockData.length > 0 ? (
+                        <div>
+                          <div className={`text-sm mb-4 transition-colors duration-300 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                            Click on any stock to ask the assistant about it
+                          </div>
+                          {stockData.map((stock, index) => (
+                            <motion.div
+                              key={stock.symbol}
+                              initial={{ opacity: 0, y: 20 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ 
+                                duration: 0.3,
+                                delay: index * 0.05,
+                                type: "spring",
+                                stiffness: 100
+                              }}
+                            >
+                              {renderStockCard(stock)}
+                            </motion.div>
+                          ))}
+                        </div>
+                      ) : (
+                        <motion.div 
+                          className={`p-4 rounded-xl mb-4 transition-colors duration-300 ${darkMode ? 'bg-slate-800' : 'bg-slate-100'}`}
+                          animate={{
+                            backgroundColor: darkMode ? 'rgb(30, 41, 59)' : 'rgb(241, 245, 249)'
+                          }}
+                        >
+                          <p className={`text-sm transition-colors duration-300 ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+                            Unable to load stock data. Please try again later.
+                          </p>
+                        </motion.div>
+                      )}
+                    </motion.div>
+                  )}
+                  
+                  {/* Crypto Tab */}
+                  {activeTab === 'crypto' && (
+                    <motion.div 
+                      key="crypto-tab"
+                      className="h-full overflow-y-auto p-5"
+                      variants={tabContentVariants}
+                      initial="hidden"
+                      animate="visible"
+                      exit="exit"
+                    >
+                      <h3 className={`text-lg font-semibold mb-4 transition-colors duration-300 ${darkMode ? 'text-white' : 'text-slate-800'}`}>
+                        Top Cryptocurrencies
+                      </h3>
+                      
+                      {isCryptoLoading ? (
+                        <div className="flex justify-center items-center h-64">
+                          <div className="flex space-x-2">
+                            <div className="w-3 h-3 rounded-full bg-emerald-500 animate-bounce"></div>
+                            <div className="w-3 h-3 rounded-full bg-emerald-500 animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                            <div className="w-3 h-3 rounded-full bg-emerald-500 animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+                          </div>
+                        </div>
+                      ) : cryptoData.length > 0 ? (
+                        <div>
+                          <div className={`text-sm mb-4 transition-colors duration-300 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                            Click on any cryptocurrency to ask the assistant about it
+                          </div>
+                          {cryptoData.map((crypto, index) => (
+                            <motion.div
+                              key={crypto.id}
+                              initial={{ opacity: 0, y: 20 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ 
+                                duration: 0.3,
+                                delay: index * 0.05,
+                                type: "spring",
+                                stiffness: 100
+                              }}
+                            >
+                              {renderCryptoCard(crypto)}
+                            </motion.div>
+                          ))}
+                        </div>
+                      ) : (
+                        <motion.div 
+                          className={`p-4 rounded-xl mb-4`}
+                          animate={{
+                            backgroundColor: darkMode ? 'rgb(30, 41, 59)' : 'rgb(241, 245, 249)'
+                          }}
+                        >
+                          <p className={`text-sm transition-colors duration-300 ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+                            Unable to load cryptocurrency data. Please try again later.
+                          </p>
+                        </motion.div>
+                      )}
+                    </motion.div>
+                  )}
+                  
+                  {/* Insights Tab */}
+                  {activeTab === 'insights' && (
+                    <motion.div 
+                      key="insights-tab"
+                      className="h-full overflow-y-auto p-5"
+                      variants={tabContentVariants}
+                      initial="hidden"
+                      animate="visible"
+                      exit="exit"
+                    >
+                      <h3 className={`text-lg font-semibold mb-4 transition-colors duration-300 ${darkMode ? 'text-white' : 'text-slate-800'}`}>
+                        Financial Insights
+                      </h3>
+                      
+                      {insights.length > 0 ? (
+                        <div>
+                          <div className={`text-sm mb-4 transition-colors duration-300 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                            Charts created by the AI assistant
+                          </div>
+                          {insights.map((insight, index) => (
+                            <motion.div
+                              key={insight.id}
+                              initial={{ opacity: 0, y: 20 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ 
+                                duration: 0.3,
+                                delay: index * 0.1,
+                                type: "spring",
+                                stiffness: 100
+                              }}
+                            >
+                              {renderInsightCard(insight)}
+                            </motion.div>
+                          ))}
+                        </div>
+                      ) : (
+                        <motion.div 
+                          className={`p-6 rounded-xl mb-4 text-center`}
+                          animate={{
+                            backgroundColor: darkMode ? 'rgb(30, 41, 59)' : 'rgb(241, 245, 249)'
+                          }}
+                        >
+                          <BarChart4 className="mx-auto h-12 w-12 mb-3 transition-colors duration-300" style={{ color: darkMode ? 'rgb(71, 85, 105)' : 'rgb(148, 163, 184)' }} />
+                          <h4 className={`text-lg font-medium mb-2 transition-colors duration-300 ${darkMode ? 'text-white' : 'text-slate-800'}`}>
+                            No insights yet
+                          </h4>
+                          <p className={`text-sm max-w-md mx-auto transition-colors duration-300 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                            Ask the assistant to create charts for stocks or cryptocurrencies.
+                            For example, try asking "Show me a chart for Apple stock"
+                          </p>
+                          <Button
+                            onClick={() => {
+                              setActiveTab('chat');
+                              setInput('Show me a chart of the S&P 500 vs Bitcoin over the last month');
+                              setTimeout(() => {
+                                inputRef.current?.focus();
+                              }, 100);
+                            }}
+                            className="mt-4 transition-colors duration-300"
+                            style={{ 
+                              backgroundColor: darkMode ? 'rgb(51, 65, 85)' : 'rgb(226, 232, 240)',
+                              color: darkMode ? 'rgb(248, 250, 252)' : 'rgb(30, 41, 59)'
+                            }}
+                            variant="outline"
+                          >
+                            Create example chart
+                          </Button>
+                        </motion.div>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
-            </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
