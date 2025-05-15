@@ -109,23 +109,55 @@ export function createPortfolioSummaryText(portfolioData) {
   text += `- Crypto: ${summary.cryptoCount} positions ($${summary.totalCryptoValue.toLocaleString()}, ${summary.allocation.crypto.toFixed(1)}%)\n`;
   text += `- Real Estate: ${summary.realEstateCount} properties ($${summary.totalRealEstateValue.toLocaleString()}, ${summary.allocation.realEstate.toFixed(1)}%)\n\n`;
   
-  text += `Top 3 Stock Holdings:\n`;
-  const topStocks = [...stocks].sort((a, b) => b.value - a.value).slice(0, 3);
-  topStocks.forEach(stock => {
-    text += `- ${stock.symbol}: $${stock.value.toLocaleString()} (${stock.shares} shares)\n`;
-  });
+  // Show all stocks instead of just the top 3
+  if (stocks.length > 0) {
+    text += `All Stock Holdings:\n`;
+    const sortedStocks = [...stocks].sort((a, b) => b.value - a.value);
+    sortedStocks.forEach(stock => {
+      const percentOfPortfolio = (stock.value / summary.totalPortfolioValue * 100).toFixed(1);
+      text += `- ${stock.symbol} (${stock.name}): $${stock.value.toLocaleString()} (${stock.shares} shares @ $${stock.price.toLocaleString()}, ${percentOfPortfolio}% of portfolio)\n`;
+    });
+    text += `\n`;
+  }
   
-  text += `\nTop 3 Crypto Holdings:\n`;
-  const topCrypto = [...crypto].sort((a, b) => b.value - a.value).slice(0, 3);
-  topCrypto.forEach(coin => {
-    text += `- ${coin.symbol}: $${coin.value.toLocaleString()} (${coin.amount} coins)\n`;
-  });
+  // Show all crypto instead of just the top 3
+  if (crypto.length > 0) {
+    text += `All Crypto Holdings:\n`;
+    const sortedCrypto = [...crypto].sort((a, b) => b.value - a.value);
+    sortedCrypto.forEach(coin => {
+      const percentOfPortfolio = (coin.value / summary.totalPortfolioValue * 100).toFixed(1);
+      text += `- ${coin.symbol} (${coin.name}): $${coin.value.toLocaleString()} (${coin.amount} coins @ $${coin.price.toLocaleString()}, ${percentOfPortfolio}% of portfolio)\n`;
+    });
+    text += `\n`;
+  }
   
+  // Include all real estate holdings with detailed information
   if (realEstate.length > 0) {
-    text += `\nReal Estate Holdings:\n`;
+    text += `All Real Estate Holdings:\n`;
     realEstate.forEach(property => {
       const equity = property.equity;
-      text += `- ${property.address}: $${property.currentValue.toLocaleString()} (Equity: $${equity.toLocaleString()})\n`;
+      const equityPercentage = ((equity / property.currentValue) * 100).toFixed(1);
+      const percentOfPortfolio = (property.currentValue / summary.totalPortfolioValue * 100).toFixed(1);
+      const yearsSinceAcquisition = new Date().getFullYear() - property.yearPurchased;
+      const appreciation = property.purchasePrice > 0 
+        ? ((property.currentValue - property.purchasePrice) / property.purchasePrice * 100).toFixed(1) 
+        : 'N/A';
+      
+      text += `- ${property.address} (${property.type}):\n`;
+      text += `  • Current Value: $${property.currentValue.toLocaleString()} (${percentOfPortfolio}% of portfolio)\n`;
+      text += `  • Purchase Price: $${property.purchasePrice.toLocaleString()} (${yearsSinceAcquisition} years ago, ${appreciation}% appreciation)\n`;
+      text += `  • Equity: $${equity.toLocaleString()} (${equityPercentage}% of property value)\n`;
+      
+      if (property.annualRent) {
+        const grossYield = ((property.annualRent / property.currentValue) * 100).toFixed(1);
+        text += `  • Annual Rent: $${property.annualRent.toLocaleString()} (${grossYield}% gross yield)\n`;
+      }
+      
+      if (property.roi) {
+        text += `  • ROI: ${property.roi.toFixed(1)}%\n`;
+      }
+      
+      text += `\n`;
     });
   }
   

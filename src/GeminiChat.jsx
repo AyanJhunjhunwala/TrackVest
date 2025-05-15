@@ -365,11 +365,13 @@ const fetchTopCryptos = async (limit = 10) => {
   }
 };
 
+// Replace the Alpha Vantage API key reference
+const alphaVantageKey = localStorage.getItem('reportallApiKey') || "demo";
+
 // Fetch stock data using Alpha Vantage instead of Polygon
 const fetchPopularStocks = async () => {
   // Popular tech and finance stocks
   const popularTickers = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'JPM', 'V', 'NVDA', 'BAC'];
-  const alphaVantageKey = localStorage.getItem('alphaVantageApiKey') || "demo";
   
   try {
     // Since we can't batch requests with the free API, we'll use external API for real data
@@ -377,7 +379,7 @@ const fetchPopularStocks = async () => {
       popularTickers.map(async (ticker) => {
         try {
           // Try to get real data from a financial API
-          const response = await fetch(`https://finnhub.io/api/v1/quote?symbol=${ticker}&token=c0mj9c2ad3ie37n3qieg`);
+          const response = await fetch(`https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${alphaVantageKey}`);
           const data = await response.json();
           
           if (data && data.c) {
@@ -470,6 +472,51 @@ const tabContentVariants = {
   }
 };
 
+// Define enhanced animations for stocks and crypto tabs
+const enhancedTabVariants = {
+  hidden: { 
+    opacity: 0, 
+    y: 20, 
+    scale: 0.97 
+  },
+  visible: { 
+    opacity: 1, 
+    y: 0, 
+    scale: 1,
+    transition: { 
+      type: "spring",
+      damping: 15,
+      stiffness: 100,
+      duration: 0.5,
+      when: "beforeChildren",
+      staggerChildren: 0.08
+    }
+  },
+  exit: { 
+    opacity: 0, 
+    y: -20,
+    transition: { 
+      duration: 0.3 
+    }
+  }
+};
+
+const cardItemVariants = {
+  hidden: { 
+    opacity: 0, 
+    y: 20 
+  },
+  visible: { 
+    opacity: 1, 
+    y: 0,
+    transition: { 
+      type: "spring", 
+      stiffness: 100,
+      damping: 15
+    }
+  }
+};
+
 export default function GeminiChat({ darkMode, positions = [], realEstateHoldings = [], onAddInsight }) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
@@ -559,26 +606,39 @@ export default function GeminiChat({ darkMode, positions = [], realEstateHolding
     setMessages([
       { 
         role: 'system', 
-        content: `You are a helpful financial assistant for TrackVest users. You have access to the user's investment portfolio:
+        content: `You are a helpful financial assistant for TrackVest users. You have access to the user's complete investment portfolio including stocks, crypto, and real estate and you can make charts:
 
 ${portfolioSummaryText}${marketDataText}${newsText}
 
 ${FINANCIAL_KNOWLEDGE}
 
+The portfolio data above contains the user's ACTUAL holdings. You must use this information when answering questions about their portfolio. For example:
+- When they ask "How many shares of MSFT do I have?" - look at the actual data above
+- When they ask about their real estate - provide details from the actual properties they own
+- When they ask about their crypto - reference their actual cryptocurrency holdings
+
 You can fetch real-time data for stocks, crypto, and real estate markets to enhance your responses.
 
-You can also generate interactive charts for users. Suggest charts when relevant, such as:
-- Stock price charts (e.g., "Show me a chart for AAPL")
-- Portfolio allocation charts
-- Sector breakdown charts
-- Performance comparison charts (e.g., "Compare MSFT, GOOGL, and AMZN")
+When users ask about their specific investments:
+- For stocks: Provide the symbol, quantity, current price, total value, and percentage of portfolio
+- For crypto: Provide the symbol, amount, current price, total value, and percentage of portfolio
+- For real estate: Provide property details, valuation, equity, mortgage, rental yield, and ROI when available
+
+You can also generate interactive charts for users, but ONLY when they specifically request a chart or graph. 
+Examples of chart requests:
+- "Show me a chart for AAPL"
+- "Create a graph of my portfolio"
+- "Visualize the performance of MSFT"
+- "Plot the comparison between GOOGL and AMZN"
 
 When users ask about their portfolio:
-1. Provide concise, accurate information about their investments
+1. Provide concise, accurate information directly from the portfolio data provided above
 2. For performance questions, focus on values, changes, and percentages
 3. Offer insights about asset allocation and diversification
 4. Be specific about individual holdings when asked
-5. Be friendly but professional`
+5. Be friendly but professional
+
+If users ask to "feed in" additional data, remind them they can use the Import Portfolio button in the header to add their custom investment data.`
       },
       { role: 'assistant', content: 'Hello! I\'m your TrackVest assistant. Ask me about your portfolio, market data, or financial insights. I can also create charts that will appear in your Insights tab' }
     ]);
@@ -691,17 +751,45 @@ When users ask about their portfolio:
       // Create a Gemini model using the proper method
       const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
       
+      // Get current portfolio data for directly including in each prompt
+      const currentPortfolioSummaryText = createPortfolioSummaryText(formatPortfolioData(positions, realEstateHoldings));
+      
       const prompt = `
         ${input}
         
-        VERY IMPORTANT: In your response, list any stock ticker symbols mentioned in the query or that are relevant to this topic.
+        IMPORTANT: I'm providing you with the user's current portfolio data right now. You MUST use this information to answer questions about their holdings:
+        
+        ${currentPortfolioSummaryText}
+        
+        VERY IMPORTANT: In your response, list ONLY stock ticker symbols that are explicitly mentioned in the query. Do not add any tickers that were not mentioned by the user.
+        
+        For comparison charts:
+        - If user requests "compare AAPL and MSFT", return exactly these two: AAPL, MSFT
+        - If user requests "compare AAPL, MSFT, and GOOGL", return exactly these three: AAPL, MSFT, GOOGL
+        - Do not add extra tickers beyond what was explicitly requested
+        
         Format them exactly like this at the end of your response:
         TICKER_SYMBOLS: AAPL, MSFT, GOOGL
         
         Do NOT include square brackets, just use a comma-separated list.
-        For example: "TICKER_SYMBOLS: AAPL, MSFT, GOOGL"
-        If no ticker symbols are relevant, still include "TICKER_SYMBOLS: NONE"
+        If no ticker symbols are mentioned, include "TICKER_SYMBOLS: NONE"
         Only include actual ticker symbols, not company names or other words.
+        
+        WHEN DISCUSSING THE USER'S PORTFOLIO:
+        - If asked about specific stocks, check the portfolio data above and provide precise information including shares, value, etc.
+        - If asked about specific cryptocurrencies, check the portfolio data above and provide precise information
+        - If asked about real estate holdings, provide all relevant details like value, equity, mortgage, etc.
+        - For any holdings NOT in the user's portfolio, clearly indicate this
+        
+        CHART CREATION RULES:
+        - ONLY create charts when the user explicitly asks for a chart or graph
+        - Do NOT extract ticker symbols for charts unless the user clearly wants a visualization
+        - Example chart requests: "show me a chart for AAPL", "create a graph of my stocks", "visualize MSFT performance"
+        - For general questions about holdings, just provide the text information, not charts
+        
+        If the user asks about importing or feeding in more data, explain they can use the "Import Portfolio" button in the header.
+        
+        Give me condensed outputs and properly formatted.
       `;
       
       // Call generateContent on the model instance with error handling
@@ -733,7 +821,6 @@ When users ask about their portfolio:
           .split(',')
           .map(t => t.trim())
           .filter(t => t !== 'NONE' && t.length > 0)
-          .slice(0, 3) // Limit to maximum 3 tickers to avoid rate limiting
         : [];
       
       console.log("Extracted tickers:", tickerSymbols);
@@ -748,9 +835,15 @@ When users ask about their portfolio:
       };
       setMessages(prev => [...prev, assistantMessage]);
       
-      // If we have ticker symbols, create charts for them
-      if (tickerSymbols.length > 0) {
-        // Only create comparison charts if explicitly requested
+      // Determine if a chart was actually requested
+      const chartRequestKeywords = ['chart', 'graph', 'plot', 'visualize', 'visualization', 'show me'];
+      const containsChartRequest = chartRequestKeywords.some(keyword => 
+        input.toLowerCase().includes(keyword)
+      );
+      
+      // Only create charts if explicitly requested and we have ticker symbols
+      if (containsChartRequest && tickerSymbols.length > 0) {
+        // Check for comparison intent by looking for comparison words
         const isComparison = input.toLowerCase().includes('compar') || 
                              input.toLowerCase().includes('versus') || 
                              input.toLowerCase().includes(' vs ') ||
@@ -760,13 +853,14 @@ When users ask about their portfolio:
         const timeframe = timeframeMatch ? timeframeMatch[1].toLowerCase() : '1m';
         
         try {
+          // Create a comparison chart if explicitly requested AND we have multiple tickers
           if (isComparison && tickerSymbols.length > 1) {
-            console.log(`Creating comparison chart for: ${tickerSymbols.join(', ')}`);
+            console.log(`Creating comparison chart for ${tickerSymbols.length} symbols: ${tickerSymbols.join(', ')}`);
             
             // Create a comparison chart
             const chartId = `comparison_${Date.now()}`;
             
-            // Create custom comparison chart data
+            // Create custom comparison chart data with exactly the requested symbols
             const comparisonData = await createTestComparisonChart(tickerSymbols, timeframe);
             
             // Add to chart system via emitter
@@ -774,11 +868,11 @@ When users ask about their portfolio:
             
             const chartMessage = { 
               role: 'assistant', 
-              content: `I've added a comparison chart for ${tickerSymbols.join(', ')} to your Insights tab using market data.`
+              content: `I've added a comparison chart for ${tickerSymbols.join(', ')} to your Insights tab.`
             };
             setMessages(prev => [...prev, chartMessage]);
-          } else {
-            // Create separate charts for each ticker
+          } else if (containsChartRequest) {
+            // Create separate charts for each ticker, but only if a chart was requested
             for (const symbol of tickerSymbols) {
               console.log(`Creating chart for: ${symbol}`);
               
@@ -1121,6 +1215,7 @@ When users ask about their portfolio:
               series={data.series}
               xKey={data.chartConfig?.xKey} 
               title={data.chartConfig?.title} 
+              metricType={data.chartConfig?.metricType || 'Price (USD)'}
               darkMode={darkMode}
             />
           ) : (
@@ -1386,14 +1481,17 @@ When users ask about their portfolio:
                     <motion.div 
                       key="stocks-tab"
                       className="h-full overflow-y-auto p-5"
-                      variants={tabContentVariants}
+                      variants={enhancedTabVariants}
                       initial="hidden"
                       animate="visible"
                       exit="exit"
                     >
-                      <h3 className={`text-lg font-semibold mb-4 transition-colors duration-300 ${darkMode ? 'text-white' : 'text-slate-800'}`}>
+                      <motion.h3 
+                        className={`text-lg font-semibold mb-4 transition-colors duration-300 ${darkMode ? 'text-white' : 'text-slate-800'}`}
+                        variants={cardItemVariants}
+                      >
                         Popular Stocks
-                      </h3>
+                      </motion.h3>
                       
                       {isStockLoading ? (
                         <div className="flex justify-center items-center h-64">
@@ -1405,20 +1503,17 @@ When users ask about their portfolio:
                         </div>
                       ) : stockData.length > 0 ? (
                         <div>
-                          <div className={`text-sm mb-4 transition-colors duration-300 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                          <motion.div 
+                            variants={cardItemVariants}
+                            className={`text-sm mb-4 transition-colors duration-300 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}
+                          >
                             Click on any stock to ask the assistant about it
-                          </div>
+                          </motion.div>
                           {stockData.map((stock, index) => (
                             <motion.div
                               key={stock.symbol}
-                              initial={{ opacity: 0, y: 20 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              transition={{ 
-                                duration: 0.3,
-                                delay: index * 0.05,
-                                type: "spring",
-                                stiffness: 100
-                              }}
+                              variants={cardItemVariants}
+                              custom={index}
                             >
                               {renderStockCard(stock)}
                             </motion.div>
@@ -1427,6 +1522,7 @@ When users ask about their portfolio:
                       ) : (
                         <motion.div 
                           className={`p-4 rounded-xl mb-4 transition-colors duration-300 ${darkMode ? 'bg-slate-800' : 'bg-slate-100'}`}
+                          variants={cardItemVariants}
                           animate={{
                             backgroundColor: darkMode ? 'rgb(30, 41, 59)' : 'rgb(241, 245, 249)'
                           }}
@@ -1444,14 +1540,17 @@ When users ask about their portfolio:
                     <motion.div 
                       key="crypto-tab"
                       className="h-full overflow-y-auto p-5"
-                      variants={tabContentVariants}
+                      variants={enhancedTabVariants}
                       initial="hidden"
                       animate="visible"
                       exit="exit"
                     >
-                      <h3 className={`text-lg font-semibold mb-4 transition-colors duration-300 ${darkMode ? 'text-white' : 'text-slate-800'}`}>
+                      <motion.h3 
+                        className={`text-lg font-semibold mb-4 transition-colors duration-300 ${darkMode ? 'text-white' : 'text-slate-800'}`}
+                        variants={cardItemVariants}
+                      >
                         Top Cryptocurrencies
-                      </h3>
+                      </motion.h3>
                       
                       {isCryptoLoading ? (
                         <div className="flex justify-center items-center h-64">
@@ -1463,20 +1562,17 @@ When users ask about their portfolio:
                         </div>
                       ) : cryptoData.length > 0 ? (
                         <div>
-                          <div className={`text-sm mb-4 transition-colors duration-300 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                          <motion.div 
+                            variants={cardItemVariants}
+                            className={`text-sm mb-4 transition-colors duration-300 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}
+                          >
                             Click on any cryptocurrency to ask the assistant about it
-                          </div>
+                          </motion.div>
                           {cryptoData.map((crypto, index) => (
                             <motion.div
                               key={crypto.id}
-                              initial={{ opacity: 0, y: 20 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              transition={{ 
-                                duration: 0.3,
-                                delay: index * 0.05,
-                                type: "spring",
-                                stiffness: 100
-                              }}
+                              variants={cardItemVariants}
+                              custom={index}
                             >
                               {renderCryptoCard(crypto)}
                             </motion.div>
@@ -1485,6 +1581,7 @@ When users ask about their portfolio:
                       ) : (
                         <motion.div 
                           className={`p-4 rounded-xl mb-4`}
+                          variants={cardItemVariants}
                           animate={{
                             backgroundColor: darkMode ? 'rgb(30, 41, 59)' : 'rgb(241, 245, 249)'
                           }}

@@ -111,6 +111,7 @@ export default function InsightsTab({
                         (insight.chartData.chartConfig && Array.isArray(insight.chartData.chartConfig.series)) ? 
                           insight.chartData.chartConfig.series : []}
                       title={(insight.chartData.chartConfig) ? insight.chartData.chartConfig.title : insight.chartData.title}
+                      metricType={(insight.chartData.chartConfig) ? insight.chartData.chartConfig.metricType || 'Price (USD)' : 'Price (USD)'}
                       darkMode={darkMode}
                       onDelete={() => handleDeleteChart(insight.id)}
                     />

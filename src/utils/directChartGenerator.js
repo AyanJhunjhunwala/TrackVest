@@ -775,6 +775,11 @@ export const createTestStockChart = async (symbol, timeframe = '1m', indicators 
 
 // Create comparison chart data for multiple assets
 export const createTestComparisonChart = async (symbols, timeframe = '1m', withIndicators = false, useRawPrices = false) => {
+  // Use exactly the symbols provided without adding or removing any
+  const requestedSymbols = [...symbols]; // Clone to avoid modifying the original array
+  
+  console.log(`Creating comparison chart with exactly ${requestedSymbols.length} symbols: ${requestedSymbols.join(', ')}`);
+  
   // Fetch data for each symbol
   const symbolsData = {};
   const series = [];
@@ -798,7 +803,7 @@ export const createTestComparisonChart = async (symbols, timeframe = '1m', withI
   }
   
   // Fetch data for each symbol
-  for (const symbol of symbols) {
+  for (const symbol of requestedSymbols) {
     // Get chart data (real or synthetic)
     const chart = await createTestStockChart(symbol, timeframe);
     const priceData = chart.chartConfig.data;
@@ -847,7 +852,7 @@ export const createTestComparisonChart = async (symbols, timeframe = '1m', withI
   for (let i = 0; i < combinedData.length; i++) {
     const currentDate = combinedData[i].date;
     
-    symbols.forEach(symbol => {
+    requestedSymbols.forEach(symbol => {
       // Find matching date in symbol data
       const matchingPoint = symbolsData[symbol].data.find(point => point.date === currentDate);
       
@@ -872,14 +877,14 @@ export const createTestComparisonChart = async (symbols, timeframe = '1m', withI
   
   // Remove data points where all symbols have null values
   const filteredData = combinedData.filter(point => {
-    return symbols.some(symbol => point[symbol] !== null);
+    return requestedSymbols.some(symbol => point[symbol] !== null);
   });
   
   // Create title based on comparison type
-  const metricType = useRawPrices ? "Price" : "Percentage Change (Base: 100%)";
+  const metricType = useRawPrices ? "Price (USD)" : "Percentage Change (Base: 100%)";
   const title = useRawPrices 
-    ? `Price Comparison: ${symbols.join(' vs ')} (${timeframe.toUpperCase()})`
-    : `Performance Comparison: ${symbols.join(' vs ')} (${timeframe.toUpperCase()})`;
+    ? `Price Comparison: ${requestedSymbols.join(' vs ')} (${timeframe.toUpperCase()})`
+    : `Performance Comparison: ${requestedSymbols.join(' vs ')} (${timeframe.toUpperCase()})`;
   
   return {
     chartConfig: {

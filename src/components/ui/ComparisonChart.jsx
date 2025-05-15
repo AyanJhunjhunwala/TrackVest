@@ -15,6 +15,7 @@ export default function ComparisonChart({
   xKey = 'date',
   series = [], // Array of series names or objects with {name, dataKey}
   title = '',
+  metricType = 'Price (USD)',
   darkMode = false,
   onDelete // Optional callback to delete the chart
 }) {
@@ -121,9 +122,17 @@ export default function ComparisonChart({
     return value;
   };
 
-  const renderTitle = title && (
-    <div className={`text-center font-medium mb-2 ${darkMode ? 'text-white' : 'text-slate-800'}`}>
-      {title}
+  // Updated title rendering with metric type
+  const renderTitle = (
+    <div className="text-center mb-2">
+      {title && (
+        <div className={`font-medium ${darkMode ? 'text-white' : 'text-slate-800'}`}>
+          {title}
+        </div>
+      )}
+      <div className={`text-xs mt-1 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+        Metric: {metricType}
+      </div>
     </div>
   );
 
@@ -202,6 +211,13 @@ export default function ComparisonChart({
             tick={{ fontSize: 12, fill: axisColor }}
             tickLine={{ stroke: axisColor }}
             axisLine={{ stroke: axisColor }}
+            label={{ 
+              value: metricType, 
+              angle: -90, 
+              position: 'insideLeft',
+              style: { textAnchor: 'middle', fill: axisColor, fontSize: 12 },
+              dy: 50
+            }}
           />
           <Tooltip 
             contentStyle={{
@@ -210,7 +226,7 @@ export default function ComparisonChart({
               borderRadius: '4px',
               color: darkMode ? '#e2e8f0' : '#334155'
             }}
-            formatter={(value) => [`${value}`, '']}
+            formatter={(value) => [`${value}`, metricType]}
           />
           <Legend 
             wrapperStyle={{
