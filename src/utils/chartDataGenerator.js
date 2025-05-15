@@ -1,5 +1,5 @@
 /**
- * Utility functions for generating chart data for Groq chat
+ * Utility functions for generating chart data for Gemini chat
  */
 
 // Generate sample stock price data
@@ -161,196 +161,182 @@ export const generateComparisonData = (symbols = ['AAPL', 'MSFT', 'GOOGL'], days
   };
 };
 
-// Parse a chat message to determine if it's requesting a chart
-export const parseChartRequest = (message) => {
-  const text = message.toLowerCase();
+// Parse chart requests from user input
+export const parseChartRequest = (input) => {
+  const inputLower = input.toLowerCase();
   
-  // Chart type detection patterns - more flexible patterns
-  const patterns = {
-    stock: /(?:show|display|create|generate|give)(?:\s+me)?(?:\s+a)?(?:\s+chart|graph|plot)?(?:\s+of)?(?:\s+the)?(?:\s+stock|price)?(?:\s+for|of)?\s+([a-z]{1,5})(?:\s+stock)?/i,
-    portfolio: /(?:show|display|create|generate|give)(?:\s+me)?(?:\s+a)?(?:\s+chart|graph|plot)?(?:\s+of)?(?:\s+the)?(?:\s+portfolio|asset)(?:\s+allocation)?/i,
-    sectors: /(?:show|display|create|generate|give)(?:\s+me)?(?:\s+a)?(?:\s+chart|graph|plot)?(?:\s+of)?(?:\s+the)?(?:\s+sector|sectors|sector breakdown|sector allocation)/i,
-    returns: /(?:show|display|create|generate|give)(?:\s+me)?(?:\s+a)?(?:\s+chart|graph|plot)?(?:\s+of)?(?:\s+the)?(?:\s+monthly|performance|return|returns)/i,
-    comparison: /(?:compare|comparison|(?:show|display|create|generate|give)(?:\s+me)?(?:\s+a)?(?:\s+comparison|comparative)(?:\s+chart|graph|plot)?)(?:\s+of|between|for)?(?:\s+the)?(?:\s+stocks)?\s+([a-z]{1,5}(?:(?:,| and| vs\.?| versus| \&)\s*[a-z]{1,5}){1,4})/i
-  };
+  // Check for comparison chart requests
+  const compareRegex = /(?:compare|comparison of|compare between)\s+([a-z0-9,\s]+)/i;
+  const compareMatch = inputLower.match(compareRegex);
   
-  // Check for stock price chart request
-  const stockMatch = text.match(patterns.stock);
-  if (stockMatch) {
-    const symbol = stockMatch[1].toUpperCase();
-    console.log(`Stock chart requested for ${symbol}`);
+  // Check for timeframe in the request
+  const timeframeRegex = /(?:over|last|past|for)\s+([0-9]+)?\s*(day|days|week|weeks|month|months|year|years)/i;
+  const timeframeMatch = inputLower.match(timeframeRegex);
+  let timeframe = '1m'; // Default to 1 month
+  
+  if (timeframeMatch) {
+    const amount = timeframeMatch[1] ? parseInt(timeframeMatch[1]) : 1;
+    const unit = timeframeMatch[2].toLowerCase();
     
-    // Determine trend if specified
-    let trend = 'random';
-    if (text.includes('upward') || text.includes('bullish') || text.includes('up trend')) {
-      trend = 'up';
-    } else if (text.includes('downward') || text.includes('bearish') || text.includes('down trend')) {
-      trend = 'down';
-    } else if (text.includes('volatile')) {
-      trend = 'volatile';
-    }
+    if (unit.startsWith('day')) timeframe = `${amount}d`;
+    else if (unit.startsWith('week')) timeframe = `${amount}w`;
+    else if (unit.startsWith('month')) timeframe = `${amount}m`;
+    else if (unit.startsWith('year')) timeframe = `${amount}y`;
+  }
+  
+  if (compareMatch) {
+    // Handle comparison chart
+    const symbolsText = compareMatch[1];
+    const symbols = symbolsText
+      .split(/(?:,|\s+and\s+)/)
+      .map(s => s.trim().toUpperCase())
+      .filter(s => s && /^[A-Z]{1,5}$/.test(s));
     
-    // Determine timeframe
-    let days = 30;
-    if (text.includes('year') || text.includes('365 days') || text.includes('12 month')) {
-      days = 365;
-    } else if (text.includes('6 month') || text.includes('half year')) {
-      days = 180;
-    } else if (text.includes('3 month') || text.includes('quarter')) {
-      days = 90;
-    } else if (text.includes('week')) {
-      days = 7;
+    if (symbols.length >= 2) {
+      return {
+        type: 'comparison',
+        symbols,
+        timeframe
+      };
     }
+  }
+  
+  // Check for single chart requests
+  const chartRegex = /(?:chart|graph|plot|visualization|price|performance|trend|history)(?:\s+for)?\s+([a-z]{1,5})/i;
+  const chartMatch = inputLower.match(chartRegex);
+  
+  if (chartMatch) {
+    const symbol = chartMatch[1].toUpperCase();
+    
+    // Determine chart type based on input
+    let type = 'line'; // Default
+    if (inputLower.includes('bar')) type = 'bar';
+    else if (inputLower.includes('candlestick') || inputLower.includes('candle')) type = 'candlestick';
+    else if (inputLower.includes('area')) type = 'area';
     
     return {
-      type: 'stock',
-      chartType: text.includes('bar') ? 'bar' : text.includes('area') ? 'area' : 'line',
-      data: generateStockPriceData(symbol, days, trend)
+      type,
+      symbol,
+      timeframe
     };
   }
   
-  // Check for portfolio allocation chart
-  const portfolioMatch = text.match(patterns.portfolio);
-  if (portfolioMatch) {
-    console.log("Portfolio allocation chart requested");
-    return {
-      type: 'portfolio',
-      chartType: text.includes('bar') ? 'bar' : 'pie',
-      data: generatePortfolioAllocationData()
-    };
-  }
-  
-  // Check for sector breakdown chart
-  const sectorMatch = text.match(patterns.sectors);
-  if (sectorMatch) {
-    console.log("Sector breakdown chart requested");
-    return {
-      type: 'sectors',
-      chartType: text.includes('bar') ? 'bar' : 'pie',
-      data: generateSectorBreakdownData()
-    };
-  }
-  
-  // Check for returns chart
-  const returnsMatch = text.match(patterns.returns);
-  if (returnsMatch) {
-    console.log("Returns chart requested");
-    let months = 12;
-    if (text.includes('year') || text.includes('12 month')) {
-      months = 12;
-    } else if (text.includes('6 month') || text.includes('half year')) {
-      months = 6;
-    } else if (text.includes('3 month') || text.includes('quarter')) {
-      months = 3;
-    }
-    
-    // Add a positive or negative bias if specified
-    let baseline = 0;
-    if (text.includes('positive') || text.includes('good') || text.includes('gains')) {
-      baseline = 2; // Positive bias
-    } else if (text.includes('negative') || text.includes('bad') || text.includes('losses')) {
-      baseline = -2; // Negative bias
-    }
-    
-    return {
-      type: 'returns',
-      chartType: 'bar',
-      data: generateMonthlyReturnsData(months, baseline)
-    };
-  }
-  
-  // Check for comparison chart
-  const comparisonMatch = text.match(patterns.comparison);
-  if (comparisonMatch) {
-    console.log("Comparison chart requested");
-    const symbolsStr = comparisonMatch[1];
-    // Handle different separators (comma, "and", "vs", "versus")
-    const symbols = symbolsStr
-      .replace(/\s+and\s+|\s+vs\.?\s+|\s+versus\s+|\s+\&\s+/gi, ',')
-      .split(/,\s*/)
-      .map(s => s.toUpperCase());
-    
-    console.log(`Symbols for comparison: ${symbols.join(', ')}`);
-    
-    // Determine timeframe
-    let days = 30;
-    if (text.includes('year') || text.includes('365 days')) {
-      days = 365;
-    } else if (text.includes('6 month') || text.includes('half year')) {
-      days = 180;
-    } else if (text.includes('3 month') || text.includes('quarter')) {
-      days = 90;
-    } else if (text.includes('week')) {
-      days = 7;
-    }
-    
-    const comparisonData = generateComparisonData(symbols, days);
-    
-    return {
-      type: 'comparison',
-      chartType: 'line',
-      data: comparisonData,
-      series: symbols
-    };
-  }
-  
-  // General chart keywords
-  if (/(?:chart|graph|plot|visualization)/i.test(text) && /(?:stock|price|market|performance|returns)/i.test(text)) {
-    // Look for stock symbols
-    const symbolMatch = text.match(/\b([A-Za-z]{1,5})\b/g);
-    if (symbolMatch && symbolMatch.length > 0) {
-      // Filter out common words that might be confused for symbols
-      const commonWords = ['show', 'me', 'a', 'the', 'and', 'for', 'of', 'vs', 'chart', 'graph', 'plot'];
-      const potentialSymbols = symbolMatch
-        .filter(word => !commonWords.includes(word.toLowerCase()))
-        .map(s => s.toUpperCase());
-      
-      if (potentialSymbols.length === 1) {
-        // Single stock chart
-        console.log(`Inferring stock chart for ${potentialSymbols[0]}`);
-        return {
-          type: 'stock',
-          chartType: 'line',
-          data: generateStockPriceData(potentialSymbols[0], 30, 'random')
-        };
-      } else if (potentialSymbols.length > 1) {
-        // Comparison chart
-        console.log(`Inferring comparison chart for ${potentialSymbols.join(', ')}`);
-        const comparisonData = generateComparisonData(potentialSymbols.slice(0, 5), 30);
-        return {
-          type: 'comparison',
-          chartType: 'line',
-          data: comparisonData,
-          series: potentialSymbols.slice(0, 5)
-        };
-      }
-    }
-  }
-  
-  // If no specific chart request is detected
   return null;
 };
 
-// Generate chart component for response
-export const generateChartResponse = (request) => {
-  if (!request) return null;
+// Generate chart data from a request
+export const generateChartResponse = (chartRequest) => {
+  if (!chartRequest) return null;
   
-  let chartConfig = {
-    type: request.chartType || 'line',
-    data: request.data.data,
-    xKey: request.data.xKey,
-    yKey: request.data.yKey,
-    title: request.data.title
-  };
+  console.log('Using local chart generator as Gemini API fallback');
   
-  if (request.type === 'comparison') {
-    // Comparison charts need special handling for multiple series
-    const series = request.series;
-    return {
-      chartConfig,
-      series
-    };
+  // Generate sample data based on the type of chart requested
+  if (chartRequest.type === 'comparison' && chartRequest.symbols) {
+    return generateComparisonChart(chartRequest.symbols, chartRequest.timeframe);
+  } else if (chartRequest.symbol) {
+    return generateSingleStockChart(chartRequest.symbol, chartRequest.type, chartRequest.timeframe);
   }
   
-  return { chartConfig };
+  return null;
+};
+
+// Generate a comparison chart for multiple symbols
+const generateComparisonChart = (symbols, timeframe) => {
+  const periods = getPeriodCount(timeframe);
+  const today = new Date();
+  const data = [];
+  
+  // Generate dates for the timeframe
+  for (let i = 0; i < periods; i++) {
+    const date = new Date(today);
+    date.setDate(today.getDate() - (periods - i));
+    
+    const dataPoint = {
+      date: date.toISOString().split('T')[0]
+    };
+    
+    // Add values for each symbol
+    symbols.forEach(symbol => {
+      // Generate a starting price between 50 and 500
+      const basePrice = 50 + Math.random() * 450;
+      // Calculate a value with some randomness but following a trend
+      const trend = 0.9 + Math.random() * 0.2; // Between 0.9 and 1.1
+      const volatility = 0.05; // 5% volatility
+      const value = basePrice * Math.pow(trend, i) * (1 + (Math.random() - 0.5) * volatility);
+      
+      dataPoint[symbol] = parseFloat(value.toFixed(2));
+    });
+    
+    data.push(dataPoint);
+  }
+  
+  const series = symbols.map(symbol => ({
+    name: symbol,
+    dataKey: symbol
+  }));
+  
+  return {
+    chartConfig: {
+      type: 'comparison',
+      data,
+      xKey: 'date',
+      title: `Comparison of ${symbols.join(', ')}`
+    },
+    series
+  };
+};
+
+// Generate a single stock chart
+const generateSingleStockChart = (symbol, chartType, timeframe) => {
+  const periods = getPeriodCount(timeframe);
+  const today = new Date();
+  const data = [];
+  
+  // Generate initial price between 50 and 500
+  const basePrice = 50 + Math.random() * 450;
+  let currentPrice = basePrice;
+  
+  // Add slight positive bias - stocks tend to go up over time
+  const trend = 1.001;
+  const volatility = 0.02; // 2% daily volatility
+  
+  for (let i = 0; i < periods; i++) {
+    const date = new Date(today);
+    date.setDate(today.getDate() - (periods - i));
+    
+    // Apply random walk with trend
+    currentPrice = currentPrice * trend * (1 + (Math.random() - 0.5) * volatility);
+    
+    data.push({
+      date: date.toISOString().split('T')[0],
+      value: parseFloat(currentPrice.toFixed(2))
+    });
+  }
+  
+  return {
+    chartConfig: {
+      type: chartType || 'line',
+      data,
+      xKey: 'date',
+      yKey: 'value',
+      title: `${symbol} Price Chart`
+    }
+  };
+};
+
+// Helper function to determine number of periods based on timeframe
+const getPeriodCount = (timeframe) => {
+  const match = timeframe.match(/(\d+)([dwmy])/);
+  if (!match) return 30; // Default to 30 days
+  
+  const [_, count, unit] = match;
+  const numCount = parseInt(count);
+  
+  switch(unit) {
+    case 'd': return numCount;
+    case 'w': return numCount * 7;
+    case 'm': return numCount * 30;
+    case 'y': return numCount * 365;
+    default: return 30;
+  }
 }; 

@@ -17,7 +17,7 @@ export default function SearchBar({
   darkMode, 
   onSelect, 
   assetType = "stocks", 
-  apiKey, // We're not using this parameter anymore since we have the Polygon API key
+  apiKey,
   placeholder = "Search for assets..."
 }) {
   const [query, setQuery] = useState('');

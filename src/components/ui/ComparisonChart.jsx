@@ -3,6 +3,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, 
   Tooltip, Legend, ResponsiveContainer, ReferenceLine
 } from 'recharts';
+import { X, Trash2 } from 'lucide-react';
 
 // Color palette for chart lines
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658'];
@@ -12,14 +13,57 @@ export default function ComparisonChart({
   width = '100%', 
   height = 300,
   xKey = 'date',
-  series = [], // Array of series names (e.g. stock symbols)
+  series = [], // Array of series names or objects with {name, dataKey}
   title = '',
-  darkMode = false
+  darkMode = false,
+  onDelete // Optional callback to delete the chart
 }) {
   const [highlightBest, setHighlightBest] = useState(false);
   const [highlightWorst, setHighlightWorst] = useState(false);
+  const [hovered, setHovered] = useState(false);
   
-  if (!data || data.length === 0 || series.length === 0) {
+  // Normalize series to always be an array of objects with name and dataKey
+  const normalizedSeries = React.useMemo(() => {
+    if (!Array.isArray(series)) {
+      console.warn('ComparisonChart: series prop is not an array, using empty array instead');
+      return [];
+    }
+    
+    return series.map(item => {
+      if (typeof item === 'string') {
+        return { name: item, dataKey: item };
+      } else if (item && typeof item === 'object' && item.name && item.dataKey) {
+        return item;
+      } else if (item && typeof item === 'object' && item.name) {
+        return { name: item.name, dataKey: item.name };
+      } else {
+        console.warn('ComparisonChart: Invalid series item', item);
+        return null;
+      }
+    }).filter(Boolean); // Remove null items
+  }, [series]);
+  
+  // Make sure we have enough data
+  const hasEnoughData = Array.isArray(data) && data.length > 1;
+  
+  // If we have a lot of data points, use every other one to prevent overcrowding of the x-axis
+  const processedData = React.useMemo(() => {
+    if (!hasEnoughData) return [];
+    
+    // If we have exactly 30 data points (monthly view), show all points but only label some
+    if (data.length === 30) {
+      return data;
+    }
+    
+    // For other cases with many data points, return a filtered set
+    if (data.length > 15) {
+      return data.filter((_, index) => index % 2 === 0);
+    }
+    
+    return data;
+  }, [data, hasEnoughData]);
+  
+  if (!hasEnoughData || normalizedSeries.length === 0) {
     return (
       <div className={`flex items-center justify-center border rounded-md h-[300px] ${darkMode ? 'border-slate-700 text-slate-400' : 'border-slate-200 text-slate-500'}`}>
         No comparison data available
@@ -30,7 +74,7 @@ export default function ComparisonChart({
   // Calculate best and worst performers
   const getBestAndWorstPerformers = () => {
     // Only calculate if we have enough data points
-    if (data.length < 2 || series.length < 2) return { best: null, worst: null };
+    if (data.length < 2 || normalizedSeries.length < 2) return { best: null, worst: null };
     
     const firstDataPoint = data[0];
     const lastDataPoint = data[data.length - 1];
@@ -38,18 +82,19 @@ export default function ComparisonChart({
     let bestPerformer = { symbol: null, change: -Infinity };
     let worstPerformer = { symbol: null, change: Infinity };
     
-    series.forEach(symbol => {
-      if (firstDataPoint[symbol] && lastDataPoint[symbol]) {
-        const startValue = firstDataPoint[symbol];
-        const endValue = lastDataPoint[symbol];
+    normalizedSeries.forEach(series => {
+      const dataKey = series.dataKey;
+      if (firstDataPoint[dataKey] && lastDataPoint[dataKey]) {
+        const startValue = firstDataPoint[dataKey];
+        const endValue = lastDataPoint[dataKey];
         const percentChange = ((endValue - startValue) / startValue) * 100;
         
         if (percentChange > bestPerformer.change) {
-          bestPerformer = { symbol, change: percentChange };
+          bestPerformer = { symbol: series.name, change: percentChange };
         }
         
         if (percentChange < worstPerformer.change) {
-          worstPerformer = { symbol, change: percentChange };
+          worstPerformer = { symbol: series.name, change: percentChange };
         }
       }
     });
@@ -59,6 +104,23 @@ export default function ComparisonChart({
   
   const { best, worst } = getBestAndWorstPerformers();
   
+  // Custom X-axis tick formatter for monthly data (30 points)
+  const formatXAxisTick = (value) => {
+    if (data.length === 30) {
+      // For monthly data, show every 6th day for cleaner axis
+      const index = data.findIndex(d => d[xKey] === value);
+      if (index % 6 === 0) {
+        // Format date as MMM-DD for monthly view
+        const date = new Date(value);
+        const month = date.toLocaleString('default', { month: 'short' });
+        const day = date.getDate();
+        return `${month}-${day}`;
+      }
+      return '';
+    }
+    return value;
+  };
+
   const renderTitle = title && (
     <div className={`text-center font-medium mb-2 ${darkMode ? 'text-white' : 'text-slate-800'}`}>
       {title}
@@ -82,7 +144,24 @@ export default function ComparisonChart({
   };
 
   return (
-    <div className="w-full">
+    <div 
+      className="w-full relative" 
+      onMouseEnter={() => setHovered(true)} 
+      onMouseLeave={() => setHovered(false)}
+    >
+      {/* Delete button that appears on hover */}
+      {hovered && onDelete && (
+        <button
+          onClick={onDelete}
+          className={`absolute top-0 right-0 z-10 p-1 rounded-full ${darkMode 
+            ? 'bg-slate-700 hover:bg-slate-600 text-slate-300' 
+            : 'bg-slate-100 hover:bg-slate-200 text-slate-600'}`}
+          title="Delete chart"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      )}
+      
       <div className="flex justify-between items-center mb-2">
         {renderTitle}
         <div className="flex space-x-1 text-xs">
@@ -108,7 +187,7 @@ export default function ComparisonChart({
       </div>
       <ResponsiveContainer width={width} height={height}>
         <LineChart
-          data={data}
+          data={processedData}
           margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
         >
           <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
@@ -117,6 +196,7 @@ export default function ComparisonChart({
             tick={{ fontSize: 12, fill: axisColor }}
             tickLine={{ stroke: axisColor }}
             axisLine={{ stroke: axisColor }}
+            tickFormatter={formatXAxisTick}
           />
           <YAxis 
             tick={{ fontSize: 12, fill: axisColor }}
@@ -142,20 +222,20 @@ export default function ComparisonChart({
           <ReferenceLine y={100} stroke={gridColor} strokeDasharray="3 3" />
           
           {/* Render a line for each series */}
-          {series.map((seriesName, index) => {
+          {normalizedSeries.map((series, index) => {
             // Check if this series should be highlighted
-            const isHighlighted = (highlightBest && seriesName === best) || 
-                                 (highlightWorst && seriesName === worst);
+            const isHighlighted = (highlightBest && series.name === best) || 
+                                 (highlightWorst && series.name === worst);
             
             // Dim non-highlighted series if any highlighting is active
             const shouldDim = (highlightBest || highlightWorst) && !isHighlighted;
             
             return (
               <Line
-                key={seriesName}
+                key={`series-${index}-${series.name}`}
                 type="monotone"
-                dataKey={seriesName}
-                name={seriesName}
+                dataKey={series.dataKey}
+                name={series.name}
                 stroke={COLORS[index % COLORS.length]}
                 strokeWidth={isHighlighted ? 3 : shouldDim ? 1 : 2}
                 dot={isHighlighted ? { r: 4 } : false}

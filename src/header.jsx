@@ -1,6 +1,6 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { RefreshCcw, Loader2, AlertCircle, Sun, Moon } from 'lucide-react';
+import { RefreshCcw, Loader2, AlertCircle, Sun, Moon, Settings } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function Header({ 
@@ -10,7 +10,8 @@ export default function Header({
   setShowApiInput, 
   refreshData, 
   isLoading, 
-  refreshApiError 
+  refreshApiError,
+  setShowSettings 
 }) {
   // Logo component
   const Logo = () => (
@@ -26,6 +27,17 @@ export default function Header({
         <Logo />
 
         <div className="flex items-center gap-3 sm:gap-6">
+          {/* Settings Button */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowSettings(true)}
+            className="w-9 h-9 p-0 rounded-full"
+          >
+            <Settings className={`h-4 w-4 ${darkMode ? 'text-slate-200' : 'text-slate-700'}`} />
+            <span className="sr-only">Settings</span>
+          </Button>
+          
           {/* Dark Mode Toggle with Sun/Moon Icon */}
           <Button
             variant="ghost"

@@ -2,7 +2,7 @@
  * Financial Data Provider
  * 
  * Utility functions for fetching real-time financial data
- * to enhance our Groq chatbot with up-to-date information
+ * to enhance our Gemini chatbot with up-to-date information
  */
 
 // Cache mechanism to avoid hitting API rate limits

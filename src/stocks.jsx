@@ -171,20 +171,7 @@ export default function StocksTab({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {!apiKey && (
-            <div className={`mb-4 p-3 rounded border ${darkMode ? 'bg-amber-900/20 border-amber-700 text-amber-200' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
-              <div className="flex items-start">
-                <AlertCircle className="h-5 w-5 mr-2 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium">Polygon.io API Key Required</p>
-                  <p className="text-xs mt-1">
-                    To search for stocks and cryptocurrencies, you need to add a Polygon.io API key in the Settings tab.
-                    Get an API key at <a href="https://polygon.io/dashboard/signup" target="_blank" rel="noopener noreferrer" className="underline">polygon.io</a>
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
+          
           
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="md:col-span-4">

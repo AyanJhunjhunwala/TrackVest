@@ -11,8 +11,8 @@ import OverviewTab from './tabs';
 import StocksTab from './stocks';
 import RealEstateTab from './realestate';
 import InsightsTab from './insights';
-import ApiKeysTab from './apikeys';
-import GroqChat from './GroqChat';
+import GeminiChat from './GeminiChat';
+import SettingsModal from './components/SettingsModal';
 
 // Import utility functions
 import { 
@@ -32,6 +32,9 @@ export default function App() {
 
   // Theme state
   const [darkMode, setDarkMode] = useState(true);
+  
+  // Settings modal state
+  const [showSettings, setShowSettings] = useState(false);
 
   // State for holdings
   const [positions, setPositions] = useState([
@@ -326,8 +329,7 @@ export default function App() {
   };
 
   return (
-    <div className={`min-h-screen ${darkMode ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-900'} transition-colors duration-300 font-sans`}>
-      {/* Header */}
+    <div className={`flex flex-col min-h-screen ${darkMode ? 'bg-slate-950 text-white' : 'bg-slate-50 text-slate-800'}`}>
       <Header 
         darkMode={darkMode} 
         setDarkMode={setDarkMode} 
@@ -336,138 +338,91 @@ export default function App() {
         refreshData={refreshData} 
         isLoading={isLoading}
         refreshApiError={refreshApiError}
+        setShowSettings={setShowSettings}
       />
-
-      {/* API Key Input - Animated */}
+      
+      <main className="flex-1 container mx-auto p-4 pt-6">
+        <Tabs defaultValue="overview" className="space-y-4">
+          <TabsList className={`grid w-full grid-cols-4 ${darkMode ? 'bg-slate-900' : 'bg-white'}`}>
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="stocks">Stocks & Crypto</TabsTrigger>
+            <TabsTrigger value="realestate">Real Estate</TabsTrigger>
+            <TabsTrigger value="insights">Insights</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="overview" className="space-y-4">
+            <OverviewTab 
+              darkMode={darkMode} 
+              positions={positions} 
+              totalValue={totalValue} 
+              totalChange={totalChange} 
+              changePercentage={changePercentage}
+              realEstateHoldings={realEstateHoldings}
+              totalRealEstateValue={totalRealEstateValue}
+              totalRealEstateEquity={totalRealEstateEquity}
+              totalAnnualRent={totalAnnualRent}
+              avgRealEstateROI={avgRealEstateROI}
+              performanceData={performanceData}
+              assetAllocation={assetAllocation}
+            />
+          </TabsContent>
+          
+          <TabsContent value="stocks" className="space-y-4">
+            <StocksTab 
+              darkMode={darkMode} 
+              positions={positions} 
+              setPositions={setPositions} 
+              totalValue={totalValue} 
+              totalChange={totalChange} 
+              changePercentage={changePercentage}
+            />
+          </TabsContent>
+          
+          <TabsContent value="realestate" className="space-y-4">
+            <RealEstateTab 
+              darkMode={darkMode} 
+              realEstateHoldings={realEstateHoldings} 
+              setRealEstateHoldings={setRealEstateHoldings}
+              totalRealEstateValue={totalRealEstateValue}
+              totalRealEstateEquity={totalRealEstateEquity}
+              totalAnnualRent={totalAnnualRent}
+              avgRealEstateROI={avgRealEstateROI}
+            />
+          </TabsContent>
+          
+          <TabsContent value="insights" className="space-y-4">
+            <InsightsTab 
+              darkMode={darkMode} 
+              positions={positions}
+              realEstateHoldings={realEstateHoldings}
+              riskData={riskData}
+              assetAllocation={assetAllocation}
+              carbonData={carbonData}
+              correlationData={correlationData}
+              sharpeRatios={sharpeRatios}
+              volatilityData={volatilityData}
+            />
+          </TabsContent>
+        </Tabs>
+      </main>
+      
+      {/* Gemini Chat Component */}
+      <GeminiChat 
+        darkMode={darkMode} 
+        positions={positions}
+        realEstateHoldings={realEstateHoldings}
+      />
+      
+      {/* Settings Modal */}
       <AnimatePresence>
-        {showApiInput && (
-          <motion.div
-            key="api-input"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.3 }}
-            className={`overflow-hidden border-b ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}
-          >
-            <div className="max-w-7xl mx-auto p-4 flex flex-col sm:flex-row gap-4 items-center">
-              <div className="flex-grow w-full">
-                <Input
-                  id="apiKeyInput"
-                  type="password"
-                  placeholder="Enter your Polygon.io API Key"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  className={`${darkMode ? 'bg-slate-700 border-slate-600 placeholder-slate-400' : 'bg-white border-slate-300 placeholder-slate-500'} text-sm`}
-                />
-              </div>
-              <Button
-                onClick={saveApiKey}
-                size="sm"
-                className={`${darkMode ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-emerald-600 hover:bg-emerald-700 text-white'} w-full sm:w-auto`}
-              >
-                Save API Key
-              </Button>
-              <div className="text-xs text-slate-400 flex-shrink-0">
-                <a href="https://polygon.io/dashboard/signup" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-emerald-400 transition-colors">
-                  <Info className="h-3 w-3" />
-                  Get a free key
-                </a>
-              </div>
-            </div>
-          </motion.div>
+        {showSettings && (
+          <SettingsModal
+            isOpen={showSettings}
+            onClose={() => setShowSettings(false)}
+            darkMode={darkMode}
+          />
         )}
       </AnimatePresence>
-
-      {/* Main Dashboard */}
-      <main className="p-4 sm:p-6">
-        <div className="max-w-7xl mx-auto">
-          {/* Main Navigation Tabs */}
-          <Tabs defaultValue="overview" className={`${darkMode ? 'text-slate-300' : 'text-slate-700'} mb-6`}>
-            <TabsList className={`grid w-full grid-cols-3 sm:grid-cols-5 mb-4 ${darkMode ? 'bg-slate-800/50' : 'bg-slate-200/70'} rounded-xl overflow-hidden p-1`}>
-              <TabsTrigger value="overview" className="gap-1 sm:gap-2 text-xs sm:text-sm px-2 py-1.5 rounded-lg transition-all duration-200 flex items-center justify-center">
-                Overview
-              </TabsTrigger>
-              <TabsTrigger value="stocks" className="gap-1 sm:gap-2 text-xs sm:text-sm px-2 py-1.5 rounded-lg transition-all duration-200 flex items-center justify-center">
-                Stocks/Crypto
-              </TabsTrigger>
-              <TabsTrigger value="realestate" className="gap-1 sm:gap-2 text-xs sm:text-sm px-2 py-1.5 rounded-lg transition-all duration-200 flex items-center justify-center">
-                Real Estate
-              </TabsTrigger>
-              <TabsTrigger value="insights" className="gap-1 sm:gap-2 text-xs sm:text-sm px-2 py-1.5 rounded-lg transition-all duration-200 flex items-center justify-center">
-                Insights
-              </TabsTrigger>
-              <TabsTrigger value="api" className="gap-1 sm:gap-2 text-xs sm:text-sm px-2 py-1.5 rounded-lg transition-all duration-200 flex items-center justify-center">
-                API Keys
-              </TabsTrigger>
-            </TabsList>
-
-            {/* Tab Contents */}
-            <TabsContent value="overview">
-              <OverviewTab 
-                darkMode={darkMode}
-                totalValue={totalValue}
-                totalRealEstateEquity={totalRealEstateEquity}
-                changePercentage={changePercentage}
-                performanceData={performanceData}
-                assetAllocation={assetAllocation}
-              />
-            </TabsContent>
-
-            <TabsContent value="stocks">
-              <StocksTab 
-                darkMode={darkMode}
-                positions={positions}
-                setPositions={setPositions}
-                totalValue={totalValue}
-                updateChartsData={updateChartsData}
-                apiKey={apiKey}
-                apiError={apiError}
-                setApiError={setApiError}
-              />
-            </TabsContent>
-
-            <TabsContent value="realestate">
-              <RealEstateTab 
-                darkMode={darkMode}
-                realEstateHoldings={realEstateHoldings}
-                setRealEstateHoldings={setRealEstateHoldings}
-                totalRealEstateEquity={totalRealEstateEquity}
-                avgRealEstateROI={avgRealEstateROI}
-              />
-            </TabsContent>
-
-            <TabsContent value="insights">
-              <InsightsTab 
-                darkMode={darkMode}
-                riskData={riskData}
-                carbonData={carbonData}
-                correlationData={correlationData}
-                sharpeRatios={sharpeRatios}
-                volatilityData={volatilityData}
-              />
-            </TabsContent>
-
-            <TabsContent value="api">
-              <ApiKeysTab 
-                darkMode={darkMode}
-                apiKeys={apiKeys}
-                setApiKeys={setApiKeys}
-              />
-            </TabsContent>
-          </Tabs>
-        </div>
-      </main>
-
-      {/* Footer */}
-      <footer className={`border-t mt-8 py-4 px-6 text-center ${darkMode ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-slate-50'}`}>
-        <p className={`text-xs ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>
-          TrackVest © {new Date().getFullYear()} | Data is sourced via Polygon.io API and simulation. For demonstration purposes only.
-          <a href="https://polygon.io" target="_blank" rel="noopener noreferrer" className="ml-2 underline hover:text-emerald-500">Data provided by Polygon.io</a>
-        </p>
-      </footer>
-
-      {/* Chatbot */}
-      <GroqChat darkMode={darkMode} positions={positions} realEstateHoldings={realEstateHoldings} />
     </div>
   );
 }

@@ -10,66 +10,66 @@ import {
 
 export default function ApiKeysTab({ darkMode, apiKeys, setApiKeys }) {
   // Local state
-  const [groqApiKey, setGroqApiKey] = useState("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");
-  const [isGroqApiKeyVisible, setIsGroqApiKeyVisible] = useState(false);
-  const [savedGroqApiKey, setSavedGroqApiKey] = useState(localStorage.getItem('groqApiKey') || "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");
-  const [isGroqKeySaved, setIsGroqKeySaved] = useState(false);
+  const [geminiApiKey, setGeminiApiKey] = useState("AIzaSyDJ7tT1DyZ4FnSWIc4UazjYL4gGCo6vN0Y");
+  const [isGeminiApiKeyVisible, setIsGeminiApiKeyVisible] = useState(false);
+  const [savedGeminiApiKey, setSavedGeminiApiKey] = useState(localStorage.getItem('geminiApiKey') || "AIzaSyDJ7tT1DyZ4FnSWIc4UazjYL4gGCo6vN0Y");
+  const [isGeminiKeySaved, setIsGeminiKeySaved] = useState(false);
   const [isPolygonKeyVisible, setIsPolygonKeyVisible] = useState(false);
 
-  // Save Groq API key to localStorage
+  // Save Gemini API key to localStorage
   useEffect(() => {
-    if (savedGroqApiKey) {
-      localStorage.setItem('groqApiKey', savedGroqApiKey);
+    if (savedGeminiApiKey) {
+      localStorage.setItem('geminiApiKey', savedGeminiApiKey);
     }
-  }, [savedGroqApiKey]);
+  }, [savedGeminiApiKey]);
 
-  // Save Groq API Key
-  const saveGroqApiKey = () => {
-    setSavedGroqApiKey(groqApiKey);
-    setIsGroqKeySaved(true);
+  // Save Gemini API Key
+  const saveGeminiApiKey = () => {
+    setSavedGeminiApiKey(geminiApiKey);
+    setIsGeminiKeySaved(true);
     
     // Show success message briefly
     setTimeout(() => {
-      setIsGroqKeySaved(false);
+      setIsGeminiKeySaved(false);
     }, 3000);
   };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      {/* Groq AI Chatbot API */}
+      {/* Gemini AI Chatbot API */}
       <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4 }}>
         <Card className={`${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md`}>
           <CardHeader>
-            <CardTitle className={`${darkMode ? 'text-slate-200' : 'text-slate-800'} text-lg font-semibold`}>Groq AI Chatbot</CardTitle>
-            <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Manage your Groq API key for the AI assistant.</p>
+            <CardTitle className={`${darkMode ? 'text-slate-200' : 'text-slate-800'} text-lg font-semibold`}>Gemini AI Chatbot</CardTitle>
+            <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Manage your Gemini API key for the AI assistant.</p>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <Label htmlFor="groqApiKey" className="text-sm font-medium mb-1 block">Groq API Key</Label>
+              <Label htmlFor="geminiApiKey" className="text-sm font-medium mb-1 block">Gemini API Key</Label>
               <div className="flex gap-2">
                 <div className="relative flex-grow">
                   <Input 
-                    id="groqApiKey" 
-                    name="groqApiKey" 
-                    type={isGroqApiKeyVisible ? "text" : "password"}
-                    placeholder="Enter your Groq API key" 
-                    value={groqApiKey} 
-                    onChange={(e) => setGroqApiKey(e.target.value)} 
+                    id="geminiApiKey" 
+                    name="geminiApiKey" 
+                    type={isGeminiApiKeyVisible ? "text" : "password"}
+                    placeholder="Enter your Gemini API key" 
+                    value={geminiApiKey} 
+                    onChange={(e) => setGeminiApiKey(e.target.value)} 
                     className={`${darkMode ? 'bg-slate-700 border-slate-600' : 'bg-white'} pr-9`} 
                   />
                   <button 
                     type="button"
                     className="absolute right-2 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-200"
-                    onClick={() => setIsGroqApiKeyVisible(!isGroqApiKeyVisible)}
+                    onClick={() => setIsGeminiApiKeyVisible(!isGeminiApiKeyVisible)}
                   >
-                    {isGroqApiKeyVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    {isGeminiApiKeyVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
                 <Button 
-                  onClick={saveGroqApiKey} 
-                  className={`flex-shrink-0 gap-1 ${isGroqKeySaved ? 'bg-emerald-600 hover:bg-emerald-700' : darkMode ? 'bg-slate-700 hover:bg-slate-600' : 'bg-slate-200 hover:bg-slate-300'}`}
+                  onClick={saveGeminiApiKey} 
+                  className={`flex-shrink-0 gap-1 ${isGeminiKeySaved ? 'bg-emerald-600 hover:bg-emerald-700' : darkMode ? 'bg-slate-700 hover:bg-slate-600' : 'bg-slate-200 hover:bg-slate-300'}`}
                 >
-                  {isGroqKeySaved ? (
+                  {isGeminiKeySaved ? (
                     <>
                       <CheckCircle className="h-4 w-4" /> Saved
                     </>
@@ -81,7 +81,7 @@ export default function ApiKeysTab({ darkMode, apiKeys, setApiKeys }) {
                 </Button>
               </div>
               <p className={`mt-2 text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                Your Groq API key is used to power the AI chatbot. Get a key at <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer" className="text-emerald-500 hover:underline">console.groq.com</a>.
+                Your Gemini API key is used to power the AI chatbot. Get a key at <a href="https://makersuite.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-emerald-500 hover:underline">makersuite.google.com</a>.
               </p>
             </div>
             <div className={`rounded-md p-3 ${darkMode ? 'bg-slate-700/50' : 'bg-slate-100'}`}>
@@ -89,7 +89,7 @@ export default function ApiKeysTab({ darkMode, apiKeys, setApiKeys }) {
               <div className="flex items-center justify-between">
                 <div>
                   <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Status: <span className="text-emerald-500">Active</span></p>
-                  <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Model: llama3-70b-8192</p>
+                  <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Model: gemini-pro</p>
                 </div>
                 <Button 
                   variant="ghost" 
