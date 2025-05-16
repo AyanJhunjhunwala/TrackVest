@@ -598,7 +598,6 @@ export default function GeminiChat({ darkMode, positions = [], realEstateHolding
     return text;
   };
 
-  // Add portfolio data to system prompt when component mounts or data changes
   useEffect(() => {
     const marketDataText = getMarketDataText();
     const newsText = getNewsText();
