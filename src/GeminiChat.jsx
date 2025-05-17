@@ -25,12 +25,10 @@ import { subscribeToStockUpdates, subscribeToComparisonUpdates } from './service
 import { createTestStockChart, createTestComparisonChart } from './utils/directChartGenerator';
 
 // Initialize Google Generative AI with API key
-const genAI = new GoogleGenerativeAI(localStorage.getItem('geminiApiKey') || "AIzaSyDJ7tT1DyZ4FnSWIc4UazjYL4gGCo6vN0Y");
+const genAI = new GoogleGenerativeAI(localStorage.getItem('geminiApiKey') || "");
 
-// Replace Polygon dependency with alternative APIs
-const CRYPTO_ICON_API = "https://logos.tradeloop.app/images/";
+// API endpoints for data fetching
 const CRYPTO_PRICE_API = "https://api.coingecko.com/api/v3";
-const STOCK_DATA_API = "https://www.alphavantage.co/query";
 
 // Define function declarations for generating charts
 const lineChartFunctionDeclaration = {
@@ -344,16 +342,17 @@ You have extensive knowledge about financial markets, including:
 Use this knowledge to provide helpful, accurate information when asked about financial topics.
 `;
 
-// Fetch crypto data from CoinGecko API instead of Polygon
+// Fetch crypto data from CoinGecko API
 const fetchTopCryptos = async (limit = 10) => {
   try {
     const response = await fetch(`${CRYPTO_PRICE_API}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=${limit}&page=1&sparkline=true`);
     const data = await response.json();
+    
     return data.map(coin => ({
       id: coin.id,
       symbol: coin.symbol.toUpperCase(),
       name: coin.name,
-      image: `${CRYPTO_ICON_API}${coin.symbol.toLowerCase()}.png`,
+      image: coin.image || `https://assets.coincap.io/assets/icons/${coin.symbol.toLowerCase()}@2x.png`,
       current_price: coin.current_price,
       price_change_percentage_24h: coin.price_change_percentage_24h,
       market_cap: coin.market_cap,
@@ -365,70 +364,38 @@ const fetchTopCryptos = async (limit = 10) => {
   }
 };
 
-// Replace the Alpha Vantage API key reference
-const alphaVantageKey = localStorage.getItem('reportallApiKey') || "demo";
-
-// Fetch stock data using Alpha Vantage instead of Polygon
+// Fetch stock data using mock data generator
 const fetchPopularStocks = async () => {
   // Popular tech and finance stocks
   const popularTickers = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'JPM', 'V', 'NVDA', 'BAC'];
   
   try {
-    // Since we can't batch requests with the free API, we'll use external API for real data
-    const results = await Promise.all(
-      popularTickers.map(async (ticker) => {
-        try {
-          // Try to get real data from a financial API
-          const response = await fetch(`https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${alphaVantageKey}`);
-          const data = await response.json();
-          
-          if (data && data.c) {
-            // Use real data if available
-            return {
-              symbol: ticker,
-              price: data.c.toFixed(2),
-              change: (data.c - data.pc).toFixed(2),
-              changePercent: ((data.c - data.pc) / data.pc * 100).toFixed(2),
-              isMock: false
-            };
-          } else {
-            // Fallback to realistic market data
-            const mockChange = (Math.random() * 6) - 3; // -3% to +3%
-            const mockPrice = ticker === 'AAPL' ? 180 + mockChange : 
-                             ticker === 'MSFT' ? 350 + mockChange : 
-                             ticker === 'GOOGL' ? 140 + mockChange :
-                             ticker === 'AMZN' ? 160 + mockChange :
-                             ticker === 'META' ? 325 + mockChange :
-                             ticker === 'TSLA' ? 250 + mockChange :
-                             ticker === 'JPM' ? 170 + mockChange :
-                             ticker === 'V' ? 230 + mockChange :
-                             ticker === 'NVDA' ? 450 + mockChange :
-                             /* BAC */ 35 + mockChange;
-            
-            return {
-              symbol: ticker,
-              price: mockPrice.toFixed(2),
-              change: mockChange.toFixed(2),
-              changePercent: (mockChange / mockPrice * 100).toFixed(2),
-              isMock: false // No longer marking as sample data
-            };
-          }
-        } catch (error) {
-          console.error(`Error fetching data for ${ticker}:`, error);
-          return {
-            symbol: ticker,
-            price: '0.00',
-            change: '0.00',
-            changePercent: '0.00',
-            error: true
-          };
-        }
-      })
-    );
+    // Generate mock data for popular stocks
+    const results = popularTickers.map(ticker => {
+      // Create realistic mock data
+      const mockChange = (Math.random() * 6) - 3; // -3% to +3%
+      const mockPrice = ticker === 'AAPL' ? 180 + mockChange : 
+                        ticker === 'MSFT' ? 350 + mockChange : 
+                        ticker === 'GOOGL' ? 140 + mockChange :
+                        ticker === 'AMZN' ? 160 + mockChange :
+                        ticker === 'META' ? 325 + mockChange :
+                        ticker === 'TSLA' ? 250 + mockChange :
+                        ticker === 'JPM' ? 170 + mockChange :
+                        ticker === 'V' ? 230 + mockChange :
+                        ticker === 'NVDA' ? 450 + mockChange :
+                        /* BAC */ 35 + mockChange;
+      
+      return {
+        symbol: ticker,
+        price: mockPrice.toFixed(2),
+        change: mockChange.toFixed(2),
+        changePercent: (mockChange / mockPrice * 100).toFixed(2)
+      };
+    });
     
-    return results.filter(stock => !stock.error);
+    return results;
   } catch (error) {
-    console.error('Error fetching stock data:', error);
+    console.error('Error generating stock data:', error);
     return [];
   }
 };

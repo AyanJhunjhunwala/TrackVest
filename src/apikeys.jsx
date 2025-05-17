@@ -10,11 +10,12 @@ import {
 
 export default function ApiKeysTab({ darkMode, apiKeys, setApiKeys }) {
   // Local state
-  const [geminiApiKey, setGeminiApiKey] = useState("AIzaSyDJ7tT1DyZ4FnSWIc4UazjYL4gGCo6vN0Y");
+  const [geminiApiKey, setGeminiApiKey] = useState(localStorage.getItem('geminiApiKey') || "");
   const [isGeminiApiKeyVisible, setIsGeminiApiKeyVisible] = useState(false);
-  const [savedGeminiApiKey, setSavedGeminiApiKey] = useState(localStorage.getItem('geminiApiKey') || "AIzaSyDJ7tT1DyZ4FnSWIc4UazjYL4gGCo6vN0Y");
+  const [savedGeminiApiKey, setSavedGeminiApiKey] = useState(localStorage.getItem('geminiApiKey') || "");
   const [isGeminiKeySaved, setIsGeminiKeySaved] = useState(false);
   const [isPolygonKeyVisible, setIsPolygonKeyVisible] = useState(false);
+  const [polygonApiKey, setPolygonApiKey] = useState(localStorage.getItem('polygonApiKey') || "");
 
   // Save Gemini API key to localStorage
   useEffect(() => {
@@ -22,6 +23,13 @@ export default function ApiKeysTab({ darkMode, apiKeys, setApiKeys }) {
       localStorage.setItem('geminiApiKey', savedGeminiApiKey);
     }
   }, [savedGeminiApiKey]);
+
+  // Save Polygon API key to localStorage
+  useEffect(() => {
+    if (polygonApiKey) {
+      localStorage.setItem('polygonApiKey', polygonApiKey);
+    }
+  }, [polygonApiKey]);
 
   // Save Gemini API Key
   const saveGeminiApiKey = () => {
@@ -88,7 +96,7 @@ export default function ApiKeysTab({ darkMode, apiKeys, setApiKeys }) {
               <h3 className={`text-sm font-medium mb-1 ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>Current Configuration</h3>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Status: <span className="text-emerald-500">Active</span></p>
+                  <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Status: <span className={geminiApiKey ? "text-emerald-500" : "text-red-500"}>{geminiApiKey ? "Active" : "Not Configured"}</span></p>
                   <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Model: gemini-pro</p>
                 </div>
                 <Button 
@@ -122,8 +130,8 @@ export default function ApiKeysTab({ darkMode, apiKeys, setApiKeys }) {
                     name="polygonApiKey" 
                     type={isPolygonKeyVisible ? "text" : "password"}
                     placeholder="Enter your Polygon.io API key" 
-                    value="9h2tWR97GWuVzS5a27bqgC4JjhC3H1uv" 
-                    readOnly
+                    value={polygonApiKey}
+                    onChange={(e) => setPolygonApiKey(e.target.value)}
                     className={`${darkMode ? 'bg-slate-700 border-slate-600' : 'bg-white'} pr-9`} 
                   />
                   <button 
@@ -134,6 +142,24 @@ export default function ApiKeysTab({ darkMode, apiKeys, setApiKeys }) {
                     {isPolygonKeyVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
+                <Button 
+                  onClick={() => {
+                    localStorage.setItem('polygonApiKey', polygonApiKey);
+                    setIsGeminiKeySaved(true);
+                    setTimeout(() => setIsGeminiKeySaved(false), 3000);
+                  }} 
+                  className={`flex-shrink-0 gap-1 ${isGeminiKeySaved ? 'bg-emerald-600 hover:bg-emerald-700' : darkMode ? 'bg-slate-700 hover:bg-slate-600' : 'bg-slate-200 hover:bg-slate-300'}`}
+                >
+                  {isGeminiKeySaved ? (
+                    <>
+                      <CheckCircle className="h-4 w-4" /> Saved
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4" /> Save
+                    </>
+                  )}
+                </Button>
               </div>
               <p className={`mt-2 text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                 Polygon.io provides real-time and historical data for stocks, crypto, and forex. Get your own API key at <a href="https://polygon.io/dashboard/signup" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">polygon.io</a>.
@@ -143,11 +169,11 @@ export default function ApiKeysTab({ darkMode, apiKeys, setApiKeys }) {
               <h3 className={`text-sm font-medium mb-1 ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>Current Configuration</h3>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Status: <span className="text-emerald-500">Active</span></p>
+                  <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Status: <span className={polygonApiKey ? "text-emerald-500" : "text-red-500"}>{polygonApiKey ? "Active" : "Not Configured"}</span></p>
                   <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Usage: <span className="text-emerald-500">Basic Plan</span></p>
                 </div>
                 <div className="text-xs text-emerald-500 font-medium">
-                  Connected
+                  {polygonApiKey ? "Connected" : "Not Connected"}
                 </div>
               </div>
             </div>

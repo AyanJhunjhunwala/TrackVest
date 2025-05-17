@@ -16,8 +16,7 @@ const cache = {
 // Cache expiration in milliseconds (15 minutes)
 const CACHE_EXPIRATION = 15 * 60 * 1000;
 
-// Polygon.io API key
-const POLYGON_API_KEY = "9h2tWR97GWuVzS5a27bqgC4JjhC3H1uv";
+// Mock data generation for financial data
 
 // Helper function to get a date 2 days ago in YYYY-MM-DD format
 const getApiDate = () => {
@@ -42,37 +41,7 @@ export async function fetchStockQuote(symbol) {
     return cache.stocks.data[symbol];
   }
 
-  try {
-    // Polygon.io API - Daily Open/Close endpoint (free tier)
-    const date = getApiDate();
-    const response = await fetch(
-      `https://api.polygon.io/v1/open-close/${symbol}/${date}?apiKey=${POLYGON_API_KEY}`
-    );
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch stock data: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    
-    if (data.status === "OK") {
-      const quote = {
-        symbol,
-        price: data.close,
-        change: data.close - data.open,
-        percentChange: ((data.close - data.open) / data.open) * 100,
-        volume: data.volume || 0,
-        timestamp: new Date().toISOString()
-      };
-      
-      // Update cache
-      cache.stocks.data[symbol] = quote;
-      cache.stocks.timestamp = now;
-      
-      return quote;
-    } else {
-      throw new Error("Invalid data format received");
-    }
+    try {    // Generate realistic mock data    const basePrice = symbol === 'AAPL' ? 180 :                       symbol === 'MSFT' ? 350 :                       symbol === 'GOOGL' ? 140 :                      symbol === 'AMZN' ? 160 :                      symbol === 'META' ? 325 :                      symbol === 'TSLA' ? 250 :                      symbol === 'JPM' ? 170 :                      symbol === 'V' ? 230 :                      symbol === 'NVDA' ? 450 :                      /* Other */ Math.random() * 200 + 50;        const changePercent = (Math.random() * 5) - 2.5;    const price = basePrice * (1 + (changePercent / 100));    const change = price - basePrice;        const quote = {      symbol,      price: price,      change: change,      percentChange: changePercent,      volume: Math.floor(Math.random() * 10000000),      timestamp: new Date().toISOString()    };        // Update cache    cache.stocks.data[symbol] = quote;    cache.stocks.timestamp = now;        return quote;
   } catch (error) {
     console.error(`Error fetching stock data for ${symbol}:`, error);
     // Return simulated data as fallback
@@ -103,38 +72,7 @@ export async function fetchCryptoQuote(symbol) {
     return cache.crypto.data[symbol];
   }
 
-  try {
-    // Polygon.io API - Daily Open/Close endpoint for crypto (free tier)
-    const date = getApiDate();
-    const ticker = `X:${symbol}USD`; // Format: X:BTCUSD
-    const response = await fetch(
-      `https://api.polygon.io/v1/open-close/${ticker}/${date}?apiKey=${POLYGON_API_KEY}`
-    );
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch crypto data: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    
-    if (data.status === "OK") {
-      const quote = {
-        symbol,
-        price: data.close,
-        change: data.close - data.open,
-        percentChange: ((data.close - data.open) / data.open) * 100,
-        volume: data.volume || 0,
-        timestamp: new Date().toISOString()
-      };
-      
-      // Update cache
-      cache.crypto.data[symbol] = quote;
-      cache.crypto.timestamp = now;
-      
-      return quote;
-    } else {
-      throw new Error("Invalid data format received");
-    }
+    try {    // Generate realistic mock data for crypto    const basePrice = symbol === 'BTC' ? 50000 + (Math.random() * 5000) :                      symbol === 'ETH' ? 2500 + (Math.random() * 500) :                     symbol === 'SOL' ? 150 + (Math.random() * 30) :                     symbol === 'ADA' ? 0.5 + (Math.random() * 0.2) :                     symbol === 'DOT' ? 10 + (Math.random() * 3) :                     /* Other */ Math.random() * 100 + 1;        const changePercent = (Math.random() * 8) - 4;    const price = basePrice * (1 + (changePercent / 100));    const change = price - basePrice;        const quote = {      symbol,      price: price,      change: change,      percentChange: changePercent,      volume: Math.floor(Math.random() * 50000000),      timestamp: new Date().toISOString()    };        // Update cache    cache.crypto.data[symbol] = quote;    cache.crypto.timestamp = now;        return quote;
   } catch (error) {
     console.error(`Error fetching crypto data for ${symbol}:`, error);
     // Return simulated data as fallback
