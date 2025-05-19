@@ -4,6 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Info, AlertCircle } from "lucide-react";
+import { Link } from "react-router-dom";
+import { useTheme } from "./ThemeContext";
 
 // Import custom components
 import Header from './header';
@@ -23,15 +25,15 @@ import {
   getCryptoLogo 
 } from './hooks';
 
-export default function App() {
+export default function TrackVestApp() {
   // State for API key
   const [apiKey, setApiKey] = useState("9h2tWR97GWuVzS5a27bqgC4JjhC3H1uv");
   const [showApiInput, setShowApiInput] = useState(false);
   const [apiError, setApiError] = useState(""); // General API error
   const [refreshApiError, setRefreshApiError] = useState(""); // Specific error during refresh
 
-  // Theme state
-  const [darkMode, setDarkMode] = useState(true);
+  // Use theme context instead of local state
+  const { darkMode, setDarkMode } = useTheme();
   
   // Settings modal state
   const [showSettings, setShowSettings] = useState(false);
@@ -41,8 +43,8 @@ export default function App() {
     { id: 1, symbol: "AAPL", name: "Apple Inc.", quantity: 15, price: 190.50, shares: 15, value: 2857.50, change: 2.3, assetType: "stocks", logoUrl: "https://logo.clearbit.com/apple.com" },
     { id: 2, symbol: "MSFT", name: "Microsoft Corp.", quantity: 10, price: 325.00, shares: 10, value: 3250.00, change: 1.7, assetType: "stocks", logoUrl: "https://logo.clearbit.com/microsoft.com" },
     { id: 3, symbol: "GOOGL", name: "Alphabet Inc.", quantity: 8, price: 140.20, shares: 8, value: 1121.60, change: -0.5, assetType: "stocks", logoUrl: "https://logo.clearbit.com/google.com" },
-    { id: 4, symbol: "BTC", name: "Bitcoin", quantity: 0.5, price: 49800.00, shares: 0.5, value: 24900.00, change: 5.2, assetType: "crypto", logoUrl: "https://cryptologos.cc/logos/bitcoin-btc-logo.png" },
-    { id: 5, symbol: "ETH", name: "Ethereum", quantity: 2.3, price: 2350.00, shares: 2.3, value: 5405.00, change: 3.8, assetType: "crypto", logoUrl: "https://cryptologos.cc/logos/ethereum-eth-logo.png" }
+    { id: 4, symbol: "BTC", name: "Bitcoin", quantity: 0.5, price: 49800.00, shares: 0.5, value: 24900.00, change: 5.2, assetType: "crypto", logoUrl: "https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/128/color/btc.png" },
+    { id: 5, symbol: "ETH", name: "Ethereum", quantity: 2.3, price: 2350.00, shares: 2.3, value: 5405.00, change: 3.8, assetType: "crypto", logoUrl: "https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/128/color/eth.png" }
   ]);
 
   // State for real estate holdings

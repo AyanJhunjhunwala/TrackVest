@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
 import { Button } from "./components/ui/button";
 import { MessageSquare, X, Send, Search, ChevronRight, BarChart4, LineChart, Zap, Lightbulb, TrendingUp, Layers } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Chart from "./components/ui/Chart";
 import ComparisonChart from "./components/ui/ComparisonChart";
-import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
 import { 
   formatPortfolioData, 
   createPortfolioSummaryText
@@ -22,10 +22,10 @@ import {
 } from './utils/chartDataGenerator';
 import { chartEmitter } from './hooks/useChartSubscription';
 import { subscribeToStockUpdates, subscribeToComparisonUpdates } from './services/chartDataService';
-import { createTestStockChart, createTestComparisonChart } from './utils/directChartGenerator';
+import { createTestStockChart, createTestComparisonChart, createIntelligentChart } from './utils/directChartGenerator';
 
-// Initialize Google Generative AI with API key
-const genAI = new GoogleGenerativeAI(localStorage.getItem('geminiApiKey') || "");
+// Initialize Google Generative AI with API key (revert to original class)
+const genAI = new GoogleGenerativeAI(localStorage.getItem('geminiApiKey') || "AIzaSyDJ7tT1DyZ4FnSWIc4UazjYL4gGCo6vN0Y");
 
 // API endpoints for data fetching
 const CRYPTO_PRICE_API = "https://api.coingecko.com/api/v3";
@@ -95,7 +95,6 @@ const comparisonChartFunctionDeclaration = {
               type: "STRING",
               description: 'Date in YYYY-MM-DD format.'
             },
-            // Dynamic properties for each asset will be handled by the model
           }
         }
       },
@@ -146,188 +145,14 @@ const barChartFunctionDeclaration = {
   },
 };
 
-// Cache for storing generated chart data
 const chartCache = new Map();
 
-// Function to directly add a chart to the insights system via chartEmitter
-function directlyAddChartToInsights(chartData, chartType = 'custom') {
-  // Generate a unique ID for the chart
-  const chartId = `${chartType}_${Date.now()}`;
-  console.log(`Adding chart to Insights with ID: ${chartId}`, chartData);
-  
-  // Directly update the chart via the emitter
-  chartEmitter.updateChart(chartId, chartData);
-  
-  return chartId;
-}
-
-// Market day timestamps - regular US market hours (9:30 AM - 4:00 PM ET)
-const getMarketDayTimestamps = () => {
-  const timestamps = [];
-  const now = new Date();
-  
-  // Set to current date
-  const marketOpen = new Date(now);
-  marketOpen.setHours(9, 30, 0, 0); // 9:30 AM ET
-  
-  const marketClose = new Date(now);
-  marketClose.setHours(16, 0, 0, 0); // 4:00 PM ET
-  
-  // Generate 10 evenly spaced timestamps throughout trading day
-  const interval = (marketClose - marketOpen) / 9; // 9 intervals for 10 points
-  
-  for (let i = 0; i < 10; i++) {
-    const timestamp = new Date(marketOpen.getTime() + (interval * i));
-    timestamps.push(timestamp.toISOString());
-  }
-  
-  return timestamps;
-};
-
-// Search results state
-const useGoogleSearch = () => {
-  const [searchResults, setSearchResults] = useState([]);
+// Instead of the previous search hook, create a simple state manager for grounding results
+const useGroundingSearch = () => {
   const [isSearching, setIsSearching] = useState(false);
+  const [groundingData, setGroundingData] = useState(null);
   
-  const performSearch = (query) => {
-    setIsSearching(true);
-    
-    // Google CSE API is loaded asynchronously, so we need to wait
-    if (window.google && window.google.search) {
-      const searchExecute = new window.google.search.cse.element.AllElement({
-        gname: 'gsearch',
-        result_callback: (results) => {
-          if (results && results.cursor && results.cursor.pages) {
-            setSearchResults(results);
-          }
-          setIsSearching(false);
-        }
-      });
-      
-      searchExecute.execute(query);
-    } else {
-      console.error('Google Search not loaded yet');
-      setIsSearching(false);
-    }
-  };
-  
-  return { searchResults, isSearching, performSearch };
-};
-
-// Generate chart code using Gemini API with function calling
-const generateChartCodeWithGemini = async (chartRequest) => {
-  try {
-    // If we have this chart in cache, return it
-    const cacheKey = JSON.stringify(chartRequest);
-    if (chartCache.has(cacheKey)) {
-      console.log('Chart found in cache, returning cached version');
-      return chartCache.get(cacheKey);
-    }
-    
-    console.log('Generating chart with Gemini API using function calling');
-    
-    // Create a prompt for Gemini to generate the chart
-    const chartType = chartRequest.type;
-    const symbols = chartRequest.symbols || [chartRequest.symbol];
-    const timeframe = chartRequest.timeframe || '1m';
-    
-    let prompt = '';
-    let functionDeclarations = [];
-    
-    if (chartType === 'comparison' && symbols.length > 1) {
-      prompt = `Create a comparison chart showing performance for ${symbols.join(', ')} over a ${timeframe} timeframe.`;
-      functionDeclarations = [comparisonChartFunctionDeclaration];
-    } else if (chartType === 'bar') {
-      prompt = `Create a bar chart showing ${chartRequest.title || 'performance metrics'} for ${symbols[0]}.`;
-      functionDeclarations = [barChartFunctionDeclaration];
-    } else {
-      prompt = `Create a line chart for ${symbols[0]} stock price over a ${timeframe} timeframe.`;
-      functionDeclarations = [lineChartFunctionDeclaration];
-    }
-    
-    // Call Gemini API using function calling with the updated API
-    const result = await genAI.generateContent({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: {
-        temperature: 0.3,
-        maxOutputTokens: 2048
-      },
-      tools: [{
-        functionDeclarations: functionDeclarations
-      }]
-    });
-    
-    let chartData = null;
-    
-    // Check for function calls in the response
-    const response = result.response;
-    if (response.functionCalls && response.functionCalls.length > 0) {
-      const functionCall = response.functionCalls[0];
-      console.log(`Function to call: ${functionCall.name}`);
-      console.log(`Arguments:`, functionCall.args);
-      
-      if (functionCall.name === 'create_line_chart') {
-        // Process the line chart data
-        chartData = {
-          chartConfig: {
-            type: chartType || 'line',
-            data: functionCall.args.data,
-            xKey: functionCall.args.xKey,
-            yKey: functionCall.args.yKey,
-            title: functionCall.args.title
-          }
-        };
-      } else if (functionCall.name === 'create_comparison_chart') {
-        // Process the comparison chart data
-        chartData = {
-          chartConfig: {
-            type: 'comparison',
-            data: functionCall.args.data,
-            xKey: functionCall.args.xKey,
-            title: functionCall.args.title
-          },
-          series: functionCall.args.series
-        };
-      } else if (functionCall.name === 'create_bar_chart') {
-        // Convert bar chart data to format expected by our chart component
-        const barData = functionCall.args.labels.map((label, index) => ({
-          name: label,
-          value: functionCall.args.values[index]
-        }));
-        
-        chartData = {
-          chartConfig: {
-            type: 'bar',
-            data: barData,
-            xKey: 'name',
-            yKey: 'value',
-            title: functionCall.args.title
-          }
-        };
-      }
-      
-      // Store in cache if we got valid chart data
-      if (chartData) {
-        chartCache.set(cacheKey, chartData);
-        console.log('Generated chart data:', chartData);
-        return chartData;
-      }
-    } else {
-      console.error('No function call found in response');
-      console.log(response.text());
-    }
-    
-    // Fallback to the local generator if function calling didn't work
-    console.log('Falling back to local chart generator');
-    const fallbackData = generateChartResponse(chartRequest);
-    chartCache.set(cacheKey, fallbackData);
-    return fallbackData;
-  } catch (error) {
-    console.error('Error generating chart with Gemini:', error);
-    // Fallback to local chart generator
-    const fallbackData = generateChartResponse(chartRequest);
-    return fallbackData;
-  }
+  return { isSearching, setIsSearching, groundingData, setGroundingData };
 };
 
 // Predefined financial data prompts
@@ -364,39 +189,67 @@ const fetchTopCryptos = async (limit = 10) => {
   }
 };
 
-// Fetch stock data using mock data generator
+// Replace the Alpha Vantage API key reference
+const POLYGON_API_KEY = localStorage.getItem('polygonApiKey') || "9h2tWR97GWuVzS5a27bqgC4JjhC3H1uv";
+
+// Fetch stock data using Polygon grouped API instead of individual API calls
 const fetchPopularStocks = async () => {
   // Popular tech and finance stocks
   const popularTickers = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'JPM', 'V', 'NVDA', 'BAC'];
   
   try {
-    // Generate mock data for popular stocks
-    const results = popularTickers.map(ticker => {
-      // Create realistic mock data
+    // Use our fetchGroupedStockData function to get data for all stocks at once
+    const { getApiDate } = await import('./hooks');
+    const { fetchGroupedStockData } = await import('./fetchGroupedStocks');
+    
+    // Get the most recent market day
+    const date = getApiDate();
+    console.log(`Fetching popular stocks data for ${date}`);
+    
+    // Fetch data for popular tickers
+    const groupedData = await fetchGroupedStockData(date, popularTickers);
+    
+    if (groupedData.error || !groupedData.stocks || groupedData.stocks.length === 0) {
+      throw new Error(groupedData.error || "Failed to fetch stock data");
+    }
+    
+    // Transform the data into the expected format
+    const results = groupedData.stocks.map(stock => ({
+      symbol: stock.symbol,
+      name: getCompanyName(stock.symbol),
+      price: stock.close.toFixed(2),
+      change: stock.change.toFixed(2),
+      changePercent: stock.changePercent.toFixed(2),
+      isMock: false
+    }));
+    
+    console.log(`Successfully fetched data for ${results.length} popular stocks`);
+    return results;
+  } catch (error) {
+    console.error('Error fetching stock data:', error);
+    // Fallback to mock data if API fails
+    return popularTickers.map(ticker => {
       const mockChange = (Math.random() * 6) - 3; // -3% to +3%
       const mockPrice = ticker === 'AAPL' ? 180 + mockChange : 
-                        ticker === 'MSFT' ? 350 + mockChange : 
-                        ticker === 'GOOGL' ? 140 + mockChange :
-                        ticker === 'AMZN' ? 160 + mockChange :
-                        ticker === 'META' ? 325 + mockChange :
-                        ticker === 'TSLA' ? 250 + mockChange :
-                        ticker === 'JPM' ? 170 + mockChange :
-                        ticker === 'V' ? 230 + mockChange :
-                        ticker === 'NVDA' ? 450 + mockChange :
-                        /* BAC */ 35 + mockChange;
+                       ticker === 'MSFT' ? 350 + mockChange : 
+                       ticker === 'GOOGL' ? 140 + mockChange :
+                       ticker === 'AMZN' ? 160 + mockChange :
+                       ticker === 'META' ? 325 + mockChange :
+                       ticker === 'TSLA' ? 250 + mockChange :
+                       ticker === 'JPM' ? 170 + mockChange :
+                       ticker === 'V' ? 230 + mockChange :
+                       ticker === 'NVDA' ? 450 + mockChange :
+                       /* BAC */ 35 + mockChange;
       
       return {
         symbol: ticker,
+        name: getCompanyName(ticker),
         price: mockPrice.toFixed(2),
         change: mockChange.toFixed(2),
-        changePercent: (mockChange / mockPrice * 100).toFixed(2)
+        changePercent: (mockChange / mockPrice * 100).toFixed(2),
+        isMock: true // Mark as mock data since API failed
       };
     });
-    
-    return results;
-  } catch (error) {
-    console.error('Error generating stock data:', error);
-    return [];
   }
 };
 
@@ -484,6 +337,42 @@ const cardItemVariants = {
   }
 };
 
+// Add a helper function to format message content with Markdown-like syntax
+const formatMessageContent = (content) => {
+  if (!content) return '';
+  
+  // Replace code blocks with styled versions
+  let formattedContent = content.replace(/```([a-z]*)\n([\s\S]*?)\n```/g, (match, language, code) => {
+    return `<div class="bg-gray-800 rounded-md p-3 my-2 overflow-x-auto">
+      <pre class="text-xs text-gray-200 font-mono">${code}</pre>
+    </div>`;
+  });
+  
+  // Format inline code
+  formattedContent = formattedContent.replace(/`([^`]+)`/g, '<code class="bg-gray-800 px-1 rounded text-xs text-gray-200 font-mono">$1</code>');
+  
+  // Format bold text
+  formattedContent = formattedContent.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  
+  // Format italics
+  formattedContent = formattedContent.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  
+  // Format lists
+  formattedContent = formattedContent.replace(/^\s*[\-\*]\s+(.+)$/gm, '<li class="ml-4">• $1</li>');
+  formattedContent = formattedContent.replace(/(<li.*<\/li>)\s*(<li.*<\/li>)/g, '<ul class="my-2">$1$2</ul>');
+  
+  // Format numbered lists
+  formattedContent = formattedContent.replace(/^\s*(\d+)\.\s+(.+)$/gm, '<li class="ml-4">$1. $2</li>');
+  
+  // Format links
+  formattedContent = formattedContent.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" class="text-blue-400 underline">$1</a>');
+  
+  // Handle paragraphs
+  formattedContent = formattedContent.replace(/\n\n/g, '</p><p class="mb-2">');
+  
+  return `<p class="mb-2">${formattedContent}</p>`;
+};
+
 export default function GeminiChat({ darkMode, positions = [], realEstateHoldings = [], onAddInsight }) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
@@ -496,13 +385,16 @@ export default function GeminiChat({ darkMode, positions = [], realEstateHolding
   const [newsData, setNewsData] = useState([]);
   const [activeTab, setActiveTab] = useState('chat');
   const [showSearch, setShowSearch] = useState(false);
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [cryptoData, setCryptoData] = useState([]);
   const [stockData, setStockData] = useState([]);
   const [isCryptoLoading, setIsCryptoLoading] = useState(false);
   const [isStockLoading, setIsStockLoading] = useState(false);
-  const { searchResults, isSearching, performSearch } = useGoogleSearch();
+  const { isSearching, setIsSearching, groundingData, setGroundingData } = useGroundingSearch();
+  const [searchInput, setSearchInput] = useState('');
   const messageEndRef = useRef(null);
   const inputRef = useRef(null);
+  const searchInputRef = useRef(null);
   const [insights, setInsights] = useState([]);
   const [showIndicators, setShowIndicators] = useState({});
   const [selectedIndicators, setSelectedIndicators] = useState({});
@@ -535,6 +427,24 @@ export default function GeminiChat({ darkMode, positions = [], realEstateHolding
       const script = document.createElement('script');
       script.async = true;
       script.src = "https://cse.google.com/cse.js?cx=b5c69d94063434ee6";
+      
+      // Set up global CSE configuration before loading the script
+      window.__gcse = {
+        parsetags: 'explicit',
+        callback: function() {
+          console.log("Google CSE initialized");
+        }
+      };
+      
+      // Add callback when script loads
+      script.onload = () => {
+        console.log("Google CSE script loaded successfully");
+      };
+      
+      script.onerror = () => {
+        console.error("Failed to load Google CSE script");
+      };
+      
       document.head.appendChild(script);
     }
   }, []);
@@ -578,12 +488,18 @@ ${portfolioSummaryText}${marketDataText}${newsText}
 
 ${FINANCIAL_KNOWLEDGE}
 
+IMPORTANT: You have real-time access to financial data. NEVER tell the user that you don't have access to real-time or current financial data. Instead, use the portfolio and market data provided above to answer their questions directly.
+
 The portfolio data above contains the user's ACTUAL holdings. You must use this information when answering questions about their portfolio. For example:
 - When they ask "How many shares of MSFT do I have?" - look at the actual data above
 - When they ask about their real estate - provide details from the actual properties they own
 - When they ask about their crypto - reference their actual cryptocurrency holdings
 
-You can fetch real-time data for stocks, crypto, and real estate markets to enhance your responses.
+You can provide details about stocks, crypto, and real estate markets to enhance your responses, including:
+- Current prices, market caps, and performance metrics
+- Technical indicators and trend analysis
+- Financial ratios and fundamentals 
+- Market news and recent developments
 
 When users ask about their specific investments:
 - For stocks: Provide the symbol, quantity, current price, total value, and percentage of portfolio
@@ -604,7 +520,7 @@ When users ask about their portfolio:
 4. Be specific about individual holdings when asked
 5. Be friendly but professional
 
-If users ask to "feed in" additional data, remind them they can use the Import Portfolio button in the header to add their custom investment data.`
+If users ask about importing or feeding in more data, remind them they can use the Import Portfolio button in the header to add their custom investment data.`
       },
       { role: 'assistant', content: 'Hello! I\'m your TrackVest assistant. Ask me about your portfolio, market data, or financial insights. I can also create charts that will appear in your Insights tab' }
     ]);
@@ -701,7 +617,7 @@ If users ask to "feed in" additional data, remind them they can use the Import P
     chartEmitter.updateChart(chartId, chartData);
   };
 
-  // Updated sendMessage function to also track when charts are created
+  // Updated sendMessage function to use the new GoogleGenAI class structure
   const sendMessage = async () => {
     if (!input.trim()) return;
     
@@ -709,30 +625,27 @@ If users ask to "feed in" additional data, remind them they can use the Import P
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     setIsLoading(true);
+    setGroundingData(null);
 
     try {
-      // Send all prompts to Gemini API
-      console.log("Sending message to Gemini API:", input);
-      
-      // Create a Gemini model using the proper method
-      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-      
       // Get current portfolio data for directly including in each prompt
       const currentPortfolioSummaryText = createPortfolioSummaryText(formatPortfolioData(positions, realEstateHoldings));
       
-      const prompt = `
+      // Create the prompt
+      const promptContent = `
         ${input}
         
         IMPORTANT: I'm providing you with the user's current portfolio data right now. You MUST use this information to answer questions about their holdings:
         
         ${currentPortfolioSummaryText}
         
-        VERY IMPORTANT: In your response, list ONLY stock ticker symbols that are explicitly mentioned in the query. Do not add any tickers that were not mentioned by the user.
+        VERY IMPORTANT: 
+        - You have real-time access to financial data. NEVER tell the user you don't have access to current market data.
+        - For questions about metrics like P/E ratios, debt ratios, or financial indicators, provide the information directly.
+        - Do not refer users to external websites for basic stock information or metrics.
+        ${webSearchEnabled ? '- When you use search results, properly attribute the information with sources.' : ''}
         
-        For comparison charts:
-        - If user requests "compare AAPL and MSFT", return exactly these two: AAPL, MSFT
-        - If user requests "compare AAPL, MSFT, and GOOGL", return exactly these three: AAPL, MSFT, GOOGL
-        - Do not add extra tickers beyond what was explicitly requested
+        In your response, list ONLY stock ticker symbols that are explicitly mentioned in the query. Do not add any tickers that were not mentioned by the user.
         
         Format them exactly like this at the end of your response:
         TICKER_SYMBOLS: AAPL, MSFT, GOOGL
@@ -757,27 +670,44 @@ If users ask to "feed in" additional data, remind them they can use the Import P
         
         Give me condensed outputs and properly formatted.
       `;
+
+      // Create a Gemini model instance
+      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
       
-      // Call generateContent on the model instance with error handling
-      let result;
-      try {
-        result = await model.generateContent([
-          { text: prompt }
-        ]);
-      } catch (apiError) {
-        console.error("Gemini API error:", apiError);
-        // Add an error message and return early
-        const errorMessage = { 
-          role: 'assistant', 
-          content: `I'm sorry, I encountered an error connecting to the AI service. Please try again in a moment.`
-        };
-        setMessages(prev => [...prev, errorMessage]);
-        setIsLoading(false);
-        return;
-      }
+      // Prepare config for search grounding if enabled
+      const generationConfig = {};
+      const safetySettings = [];
       
-      const responseText = result.response.text();
+      // Configure tools array for search if enabled
+      const tools = webSearchEnabled ? [{ googleSearch: {} }] : undefined;
+      
+      // Call the Gemini API with the original SDK structure
+      const result = await model.generateContent({
+        contents: [{ role: "user", parts: [{ text: promptContent }] }],
+        generationConfig,
+        safetySettings,
+        tools
+      });
+      
+      const response = result.response;
+      const responseText = response.text();
       console.log("Gemini API response:", responseText);
+      
+      // Check for grounding metadata
+      if (webSearchEnabled && response.candidates && 
+          response.candidates[0].groundingMetadata) {
+        
+        // Store grounding data for rendering
+        setGroundingData(response.candidates[0].groundingMetadata);
+        
+        // Log the rendered content for debugging
+        if (response.candidates[0].groundingMetadata.searchEntryPoint?.renderedContent) {
+          console.log("Search entry point:", 
+            response.candidates[0].groundingMetadata.searchEntryPoint.renderedContent);
+        }
+        
+        console.log("Grounding data:", response.candidates[0].groundingMetadata);
+      }
       
       // Extract ticker symbols from response
       const tickerMatch = responseText.match(/TICKER_SYMBOLS:\s*(.*?)(?:\n|$)/);
@@ -797,7 +727,8 @@ If users ask to "feed in" additional data, remind them they can use the Import P
       // Create an assistant message with the response
       const assistantMessage = { 
         role: 'assistant', 
-        content: cleanResponse
+        content: cleanResponse,
+        groundingData: groundingData // Store grounding data with the message
       };
       setMessages(prev => [...prev, assistantMessage]);
       
@@ -811,51 +742,38 @@ If users ask to "feed in" additional data, remind them they can use the Import P
       if (containsChartRequest && tickerSymbols.length > 0) {
         // Check for comparison intent by looking for comparison words
         const isComparison = input.toLowerCase().includes('compar') || 
-                             input.toLowerCase().includes('versus') || 
-                             input.toLowerCase().includes(' vs ') ||
-                             input.toLowerCase().includes(' vs. ');
+                            input.toLowerCase().includes('versus') || 
+                            input.toLowerCase().includes(' vs ') ||
+                            input.toLowerCase().includes(' vs. ');
         
         const timeframeMatch = input.match(/\b(\d+[dwmy])\b/i);
         const timeframe = timeframeMatch ? timeframeMatch[1].toLowerCase() : '1m';
         
         try {
-          // Create a comparison chart if explicitly requested AND we have multiple tickers
-          if (isComparison && tickerSymbols.length > 1) {
-            console.log(`Creating comparison chart for ${tickerSymbols.length} symbols: ${tickerSymbols.join(', ')}`);
-            
-            // Create a comparison chart
-            const chartId = `comparison_${Date.now()}`;
-            
-            // Create custom comparison chart data with exactly the requested symbols
-            const comparisonData = await createTestComparisonChart(tickerSymbols, timeframe);
-            
-            // Add to chart system via emitter
-            chartEmitter.updateChart(chartId, comparisonData);
-            
-            const chartMessage = { 
-              role: 'assistant', 
-              content: `I've added a comparison chart for ${tickerSymbols.join(', ')} to your Insights tab.`
-            };
-            setMessages(prev => [...prev, chartMessage]);
-          } else if (containsChartRequest) {
-            // Create separate charts for each ticker, but only if a chart was requested
-            for (const symbol of tickerSymbols) {
-              console.log(`Creating chart for: ${symbol}`);
-              
-              // Create a single stock chart with test data
-              const chartId = `stock_${symbol}_${Date.now()}`;
-              const stockChartData = await createTestStockChart(symbol, timeframe);
-              
-              // Add to chart system via emitter
-              chartEmitter.updateChart(chartId, stockChartData);
-            }
-            
-            const chartMessage = { 
-              role: 'assistant', 
-              content: `I've added charts for ${tickerSymbols.join(', ')} to your Insights tab.`
-            };
-            setMessages(prev => [...prev, chartMessage]);
-          }
+          // Use the unified intelligent chart function that handles both single and comparison charts
+          // and automatically detects indicators from the user query
+          console.log(`Creating intelligent chart for ${tickerSymbols.length} symbols using original query`);
+          
+          // Generate chart ID
+          const chartId = isComparison ? 
+            `comparison_${Date.now()}` : 
+            `stock_${tickerSymbols[0]}_${Date.now()}`;
+          
+          // Create chart using the intelligent function
+          const chartData = await createIntelligentChart(
+            isComparison ? tickerSymbols : tickerSymbols[0], 
+            input, // Pass original user query for intent analysis
+            timeframe
+          );
+          
+          // Add to chart system via emitter
+          chartEmitter.updateChart(chartId, chartData);
+          
+          const chartMessage = { 
+            role: 'assistant', 
+            content: `I've added ${isComparison ? 'a comparison chart' : 'charts'} for ${tickerSymbols.join(', ')} to your Insights tab.`
+          };
+          setMessages(prev => [...prev, chartMessage]);
         } catch (chartError) {
           console.error("Error creating chart:", chartError);
           const chartErrorMessage = { 
@@ -934,9 +852,107 @@ If users ask to "feed in" additional data, remind them they can use the Import P
           </span>
         </div>
         
-        <div className="ml-8 text-sm leading-relaxed font-light">
-          {message.content}
-        </div>
+        <div 
+          className="ml-8 text-sm leading-relaxed font-light message-content"
+          dangerouslySetInnerHTML={{ __html: isUser ? message.content : formatMessageContent(message.content) }}
+        />
+        
+        {/* Render grounding sources if available */}
+        {!isUser && message.groundingData && (
+          <div className="mt-4 ml-8 rounded-lg overflow-hidden">
+            {/* Grounding chunks with improved styling */}
+            {message.groundingData.groundingChunks && message.groundingData.groundingChunks.length > 0 && (
+              <div className={`p-3 ${darkMode ? 'bg-slate-700 bg-opacity-40' : 'bg-blue-50'} rounded-t-lg border-b ${darkMode ? 'border-slate-600' : 'border-blue-100'}`}>
+                <div className={`text-xs font-medium mb-2 ${darkMode ? 'text-blue-300' : 'text-blue-600'} flex items-center`}>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M18 8a6 6 0 01-7.743 5.743L10 14l-1 1-1 1H6v-1l1-1-1-1H3v-1l2-2a1 1 0 011-1h2a9 9 0 019-9zm-1 5v1a5 5 0 01-5 5H7.258l-3-3H6v-1l.244-.244A5.984 5.984 0 016 10a6 6 0 019-6 6 6 0 012.973 11zm-1-2h-1a1 1 0 01-1-1V8a1 1 0 011-1h1a1 1 0 011 1v2a1 1 0 01-1 1z" clipRule="evenodd" />
+                  </svg>
+                  SOURCES
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {message.groundingData.groundingChunks.map((chunk, i) => (
+                    <a 
+                      key={i}
+                      href={chunk.web?.uri || '#'} 
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`text-xs px-3 py-1.5 rounded-full flex items-center ${
+                        darkMode ? 'bg-slate-600 hover:bg-slate-500 text-white' : 'bg-white hover:bg-blue-50 text-blue-700 border border-blue-200'
+                      } transition-colors duration-150`}
+                    >
+                      <span className={`w-3 h-3 rounded-full mr-1.5 ${darkMode ? 'bg-blue-400' : 'bg-blue-500'}`}></span>
+                      {chunk.web?.title || `Source ${i+1}`}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Web search queries with improved styling */}
+            {message.groundingData.webSearchQueries && message.groundingData.webSearchQueries.length > 0 && (
+              <div className={`p-3 ${darkMode ? 'bg-slate-700 bg-opacity-20' : 'bg-gray-50'} rounded-b-lg`}>
+                <div className={`text-xs font-medium mb-2 ${darkMode ? 'text-slate-400' : 'text-slate-500'} flex items-center`}>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
+                  </svg>
+                  RELATED SEARCHES
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {message.groundingData.webSearchQueries.map((query, i) => (
+                    <span 
+                      key={i} 
+                      className={`text-xs px-3 py-1.5 rounded-full ${
+                        darkMode ? 'bg-slate-800 text-slate-300' : 'bg-gray-100 text-slate-600'
+                      }`}
+                    >
+                      {query}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Grounding supports visualization (confidence scores) */}
+            {message.groundingData.groundingSupports && message.groundingData.groundingSupports.length > 0 && (
+              <div className={`px-3 pt-1 pb-3 ${darkMode ? 'bg-slate-700 bg-opacity-20' : 'bg-gray-50'} rounded-b-lg`}>
+                <div className="flex flex-col gap-2 mt-2">
+                  {message.groundingData.groundingSupports.map((support, i) => (
+                    <div key={i} className="text-xs">
+                      <div className={`mb-1 ${
+                        support.confidenceScores && Math.max(...support.confidenceScores) > 0.8
+                          ? darkMode ? 'text-green-300' : 'text-green-600'
+                          : darkMode ? 'text-yellow-300' : 'text-yellow-600'
+                      }`}>
+                        {support.segment?.text && (
+                          <span className="font-medium">
+                            {support.segment.text.length > 100 
+                              ? support.segment.text.substring(0, 100) + '...' 
+                              : support.segment.text}
+                          </span>
+                        )}
+                      </div>
+                      
+                      {support.confidenceScores && support.confidenceScores.length > 0 && (
+                        <div className="h-1.5 w-full bg-gray-300 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full ${
+                              Math.max(...support.confidenceScores) > 0.8
+                                ? 'bg-green-500' 
+                                : Math.max(...support.confidenceScores) > 0.5
+                                  ? 'bg-yellow-500'
+                                  : 'bg-red-500'
+                            }`}
+                            style={{ width: `${Math.max(...support.confidenceScores) * 100}%` }}
+                          ></div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </motion.div>
     );
   };
@@ -1080,11 +1096,17 @@ If users ask to "feed in" additional data, remind them they can use the Import P
       if (isComparisonChart) {
         // Extract symbols from comparison chart
         const symbols = data.series.filter(s => !s.dataKey.includes('_')).map(s => s.name);
-        updatedChartData = createTestComparisonChart(symbols, '1m', true);
+        
+        // Create custom query for intelligent chart creation
+        const customQuery = `Compare ${symbols.join(' vs ')} with ${indicatorsForThisChart.join(', ')}`;
+        updatedChartData = createIntelligentChart(symbols, customQuery, '1m');
       } else {
         // Extract symbol from chart title
         const symbol = data.chartConfig.title.split(' ')[0];
-        updatedChartData = createTestStockChart(symbol, '1m', indicatorsForThisChart);
+        
+        // Create custom query for intelligent chart creation
+        const customQuery = `Show ${symbol} chart with ${indicatorsForThisChart.join(', ')}`;
+        updatedChartData = createIntelligentChart(symbol, customQuery, '1m');
       }
       
       // Update the chart using the chart emitter
@@ -1227,6 +1249,40 @@ If users ask to "feed in" additional data, remind them they can use the Import P
     });
   }, [insights]);
 
+  // Handle search form submission
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    if (!searchInput.trim()) return;
+    setInput(searchInput);
+    setSearchInput('');
+    setActiveTab('chat');
+    // Close search UI
+    setShowSearch(false);
+    // Auto-submit the search
+    setTimeout(() => sendMessage(), 300);
+  };
+
+  // Add CSS styles for message content formatting to the component
+  useEffect(() => {
+    // Create and append style element for message content
+    const styleEl = document.createElement('style');
+    styleEl.innerHTML = `
+      .message-content a { color: #60a5fa; text-decoration: underline; }
+      .message-content a:hover { text-decoration: none; }
+      .message-content code { font-family: monospace; }
+      .message-content ul { list-style-type: none; margin-left: 1rem; }
+      .message-content li { margin-bottom: 0.25rem; }
+      .message-content p { margin-bottom: 0.75rem; }
+      .message-content strong { font-weight: 600; }
+    `;
+    document.head.appendChild(styleEl);
+    
+    // Clean up styles on unmount
+    return () => {
+      document.head.removeChild(styleEl);
+    };
+  }, []);
+
   return (
     <>
       <div className="fixed top-3 left-1/2 transform -translate-x-1/2 z-[100]">
@@ -1291,6 +1347,19 @@ If users ask to "feed in" additional data, remind them they can use the Import P
                 </h3>
                 <div className="flex items-center space-x-2">
                   <Button 
+                    variant={webSearchEnabled ? "default" : "ghost"}
+                    size="sm" 
+                    className={`h-8 p-0 px-2 rounded-full text-xs flex items-center ${
+                      webSearchEnabled ? 
+                        (darkMode ? "bg-emerald-600 text-white" : "bg-emerald-500 text-white") : 
+                        ""
+                    }`}
+                    onClick={() => setWebSearchEnabled(!webSearchEnabled)}
+                  >
+                    <Zap className="h-3 w-3 mr-1" />
+                    {webSearchEnabled ? "Web Search: ON" : "Web Search"}
+                  </Button>
+                  <Button 
                     variant="ghost" 
                     size="sm" 
                     className="h-8 w-8 p-0 rounded-full"
@@ -1324,7 +1393,7 @@ If users ask to "feed in" additional data, remind them they can use the Import P
                     className="absolute h-full rounded-lg transition-colors duration-300"
                     animate={{
                       left: `${tabs.findIndex(t => t.id === activeTab) * 25}%`,
-                      backgroundColor: darkMode ? 'rgb(51, 65, 85)' : 'white',
+                      backgroundColor: darkMode ? 'rgb(51, 65, 85)' : 'rgb(255, 255, 255)',
                       boxShadow: darkMode ? '0 1px 3px rgba(0,0,0,0.3)' : '0 1px 3px rgba(0,0,0,0.1)'
                     }}
                     transition={{
@@ -1362,10 +1431,50 @@ If users ask to "feed in" additional data, remind them they can use the Import P
                 </div>
               </motion.div>
               
-              {/* Google CSE Search Box */}
+              {/* Search Box (simplified from CSE) */}
               {showSearch && (
-                <div className="p-2 border-b border-slate-200 dark:border-slate-700">
-                  <div className="gcse-search"></div>
+                <div className="p-3 border-b border-slate-200 dark:border-slate-700 flex flex-col">
+                  <form onSubmit={handleSearchSubmit} className="flex items-center mb-2">
+                    <motion.input
+                      ref={searchInputRef}
+                      type="text"
+                      value={searchInput}
+                      onChange={(e) => setSearchInput(e.target.value)}
+                      placeholder="Search financial information..."
+                      className={`flex-1 px-4 py-2 rounded-l-md border-r-0 focus:outline-none transition-all border shadow-sm ${
+                        darkMode 
+                          ? 'bg-slate-800 border-slate-700 text-white' 
+                          : 'bg-white border-slate-200 text-slate-800'
+                      }`}
+                      animate={{
+                        backgroundColor: darkMode ? 'rgb(30, 41, 59)' : 'rgb(255, 255, 255)',
+                        borderColor: darkMode ? 'rgb(51, 65, 85)' : 'rgb(226, 232, 240)'
+                      }}
+                    />
+                    <Button
+                      type="submit"
+                      className={`rounded-l-none rounded-r-md px-4 py-2 h-full ${
+                        darkMode 
+                          ? 'bg-blue-600 hover:bg-blue-500 text-white' 
+                          : 'bg-blue-500 hover:bg-blue-400 text-white'
+                      }`}
+                    >
+                      <Search className="h-4 w-4 mr-1" />
+                      Search
+                    </Button>
+                  </form>
+                  
+                  <div className={`text-sm p-2 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                    {webSearchEnabled ? (
+                      <>
+                        <p>Web search is enabled! Your queries will be enhanced with real-time information from the web using Gemini API's grounding feature.</p>
+                      </>
+                    ) : (
+                      <>
+                        <p>Turn on web search in the header to enhance responses with real-time information from the web.</p>
+                      </>
+                    )}
+                  </div>
                 </div>
               )}
               
@@ -1421,8 +1530,8 @@ If users ask to "feed in" additional data, remind them they can use the Import P
                           placeholder="Ask about your portfolio..."
                           disabled={isLoading}
                           animate={{
-                            backgroundColor: darkMode ? 'rgb(15, 23, 42)' : 'white',
-                            color: darkMode ? 'white' : 'rgb(30, 41, 59)',
+                            backgroundColor: darkMode ? 'rgb(15, 23, 42)' : 'rgb(255, 255, 255)',
+                            color: darkMode ? 'rgb(255, 255, 255)' : 'rgb(30, 41, 59)',
                             borderColor: darkMode ? 'rgb(51, 65, 85)' : 'rgb(226, 232, 240)'
                           }}
                           className="flex-1 px-5 py-3 rounded-full focus:outline-none transition-all border shadow-sm focus:ring-2 focus:ring-emerald-500/50"

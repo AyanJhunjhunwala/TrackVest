@@ -1028,3 +1028,107 @@ export const createPortfolioAllocationChart = (positions) => {
     }
   };
 }; 
+
+/**
+ * Creates an intelligent chart based on user intent, data analysis, and indicator feasibility
+ * @param {string|Array} symbol - Stock symbol(s) to chart (string for single, array for comparison)
+ * @param {string} userQuery - The original user query to analyze for intent
+ * @param {string} timeframe - Time period for the chart (e.g., '1w', '1m', '3m', '1y')
+ * @return {Object} Chart configuration and data
+ */
+export const createIntelligentChart = async (symbol, userQuery, timeframe = '1m') => {
+  console.log(`Creating intelligent chart for ${Array.isArray(symbol) ? symbol.join(', ') : symbol}`);
+  
+  // Analyze if this is a comparison chart request
+  const isComparisonChart = Array.isArray(symbol) && symbol.length > 1;
+  
+  // Analyze user query for indicators and other parameters
+  const indicators = analyzeChartIntent(userQuery);
+  
+  if (isComparisonChart) {
+    console.log(`Processing comparison chart with indicators: ${indicators.join(', ')}`);
+    return createTestComparisonChart(symbol, timeframe, indicators.length > 0, indicators.includes('price_comparison'));
+  } else {
+    // Handle single stock chart
+    const singleSymbol = Array.isArray(symbol) ? symbol[0] : symbol;
+    console.log(`Processing single stock chart for ${singleSymbol} with indicators: ${indicators.join(', ')}`);
+    return createTestStockChart(singleSymbol, timeframe, indicators);
+  }
+};
+
+/**
+ * Analyzes the user query to determine chart intent and appropriate indicators
+ * @param {string} query - The user's original query
+ * @return {Array} List of indicators to include
+ */
+function analyzeChartIntent(query) {
+  const indicators = [];
+  const normalizedQuery = query.toLowerCase();
+  
+  // Check for explicit indicators
+  if (normalizedQuery.includes('sma') || 
+      normalizedQuery.includes('simple moving average') || 
+      normalizedQuery.includes('moving average')) {
+    indicators.push('sma');
+  }
+  
+  if (normalizedQuery.includes('ema') || 
+      normalizedQuery.includes('exponential moving average')) {
+    indicators.push('ema');
+  }
+  
+  if (normalizedQuery.includes('macd') || 
+      normalizedQuery.includes('moving average convergence divergence')) {
+    indicators.push('macd');
+  }
+  
+  if (normalizedQuery.includes('rsi') || 
+      normalizedQuery.includes('relative strength') || 
+      normalizedQuery.includes('overbought') || 
+      normalizedQuery.includes('oversold')) {
+    indicators.push('rsi');
+  }
+  
+  // Check for trend analysis requests
+  if (normalizedQuery.includes('trend') || 
+      normalizedQuery.includes('analysis') || 
+      normalizedQuery.includes('technical')) {
+    // If general trend analysis requested, include useful indicators
+    if (indicators.length === 0) {
+      indicators.push('sma');
+      indicators.push('ema');
+    }
+  }
+  
+  // Check for volatility or momentum
+  if (normalizedQuery.includes('volatil') || 
+      normalizedQuery.includes('momentum') || 
+      normalizedQuery.includes('strength')) {
+    if (!indicators.includes('rsi')) {
+      indicators.push('rsi');
+    }
+  }
+  
+  // Check for comparison intent
+  if (normalizedQuery.includes('compar') || 
+      normalizedQuery.includes('versus') || 
+      normalizedQuery.includes(' vs ') || 
+      normalizedQuery.includes('against')) {
+    indicators.push('price_comparison');
+  }
+  
+  // If no specific indicators were requested but the query asks for "all" indicators
+  if (indicators.length === 0 && 
+     (normalizedQuery.includes('all indicator') || 
+      normalizedQuery.includes('every indicator') || 
+      normalizedQuery.includes('full analysis'))) {
+    indicators.push('all');
+  }
+  
+  // Default to SMA if no indicators were specified
+  if (indicators.length === 0) {
+    indicators.push('sma');
+  }
+  
+  return indicators;
+} 

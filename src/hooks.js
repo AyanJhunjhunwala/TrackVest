@@ -35,9 +35,13 @@ export const getApiDate = () => {
         // Create YYYY-MM-DD format for easier comparison
         const dateString = date.toISOString().split('T')[0];
         
-        // TEMPORARY FIX: Hard-code May 10th, 2025 as a market holiday
+        // TEMPORARY FIX: Hard-code specific May 2025 dates as market holidays
         if (dateString === '2025-05-10') {
             console.log('May 10, 2025 is detected as a market holiday');
+            return true;
+        }
+        if (dateString === '2025-05-16') {
+            console.log('May 16, 2025 is detected as a market holiday');
             return true;
         }
         
@@ -127,10 +131,15 @@ export const getApiDate = () => {
     const currentYear = today.getFullYear();
     const currentDay = today.getDate();
     
-    // If we're in May 2025, and it's the 10th or 11th, use May 9th as the last valid trading day
-    if (currentYear === 2025 && currentMonth === 4 && (currentDay === 10 || currentDay === 11)) {
-        console.log('Special case: Using May 9th, 2025 as the most recent trading day');
-        return '2025-05-09';
+    // If we're in May 2025, and it's the 10th, 11th, 16th or 17th, use May 9th or 15th as the last valid trading day
+    if (currentYear === 2025 && currentMonth === 4) {
+        if (currentDay === 10 || currentDay === 11) {
+            console.log('Special case: Using May 9th, 2025 as the most recent trading day');
+            return '2025-05-09';
+        } else if (currentDay === 16 || currentDay === 17) {
+            console.log('Special case: Using May 15th, 2025 as the most recent trading day');
+            return '2025-05-15';
+        }
     }
     
     // Find the most recent valid trading day (original logic)
@@ -161,10 +170,21 @@ export const getApiDate = () => {
         maxAttempts--;
     } while (maxAttempts > 0);
     
-    // Fallback to May 9th if we couldn't find a valid trading day
+    // Fallback to a known good market day if we couldn't find a valid trading day
     if (maxAttempts <= 0) {
-        console.warn('Could not find a valid trading day, defaulting to May 9th, 2025');
-        return '2025-05-09';
+        // Check if we're in May 2025 with specific dates
+        if (currentYear === 2025 && currentMonth === 4) {
+            if (currentDay >= 16) {
+                console.warn('Could not find a valid trading day, defaulting to May 15th, 2025');
+                return '2025-05-15';
+            } else {
+                console.warn('Could not find a valid trading day, defaulting to May 9th, 2025');
+                return '2025-05-09';
+            }
+        } else {
+            console.warn('Could not find a valid trading day, defaulting to May 9th, 2025');
+            return '2025-05-09';
+        }
     }
     
     // Format to YYYY-MM-DD
@@ -200,10 +220,14 @@ export const fetchDailyMarketData = async (apiKey) => {
     const date = getApiDate();
     const formattedDate = formatMarketDate(date);
     
-    // TEMPORARY FIX: If we're getting May 10th or 11th, forcibly use May 9th instead
+    // TEMPORARY FIX: If we're getting specific dates in May 2025, use appropriate fallbacks
     if (date === '2025-05-10' || date === '2025-05-11') {
         console.log('Overriding date to use May 9th, 2025');
         return fetchSpecificDateData('2025-05-09', key);
+    }
+    if (date === '2025-05-16' || date === '2025-05-17') {
+        console.log('Overriding date to use May 15th, 2025');
+        return fetchSpecificDateData('2025-05-15', key);
     }
     
     // If we already have data for this date in cache, return it
@@ -259,9 +283,12 @@ export const fetchDailyMarketData = async (apiKey) => {
     } catch (error) {
         console.error(`Error fetching daily market data for ${date} (${formattedDate}):`, error);
         
-        // TEMPORARY FIX: Use May 9th, 2025 data as a fallback for any errors
-        if (date !== '2025-05-09') {
-            console.warn(`Falling back to May 9th, 2025 data due to error with ${date}`);
+        // TEMPORARY FIX: Use appropriate fallbacks for error conditions
+        if (date === '2025-05-16' || date === '2025-05-17') {
+            console.warn(`Falling back to May 15th, 2025 data due to error with ${date}`);
+            return fetchSpecificDateData('2025-05-15', key);
+        } else if (date !== '2025-05-09' && date !== '2025-05-15') {
+            console.warn(`Falling back to market data from a known good date (May 9th, 2025) due to error with ${date}`);
             return fetchSpecificDateData('2025-05-09', key);
         }
         
