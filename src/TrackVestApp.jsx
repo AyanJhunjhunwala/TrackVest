@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Info, AlertCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useTheme } from "./ThemeContext";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 // Import custom components
 import Header from './header';
@@ -22,7 +23,8 @@ import {
   fetchStockPrice, 
   fetchCryptoPrice, 
   getStockLogo, 
-  getCryptoLogo 
+  getCryptoLogo,
+  getApiDate
 } from './hooks';
 
 export default function TrackVestApp() {
@@ -345,7 +347,7 @@ export default function TrackVestApp() {
       
       <main className="flex-1 container mx-auto p-4 pt-6">
         <Tabs defaultValue="overview" className="space-y-4">
-          <TabsList className={`grid w-full grid-cols-4 ${darkMode ? 'bg-slate-900' : 'bg-white'}`}>
+          <TabsList className={`grid w-full grid-cols-4 ${darkMode ? 'bg-slate-900/80 border-slate-800' : 'bg-white/90 border-slate-200'} shadow-sm rounded-lg backdrop-blur-sm transition-colors duration-200`}>
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="stocks">Stocks & Crypto</TabsTrigger>
             <TabsTrigger value="realestate">Real Estate</TabsTrigger>
@@ -353,57 +355,101 @@ export default function TrackVestApp() {
           </TabsList>
           
           <TabsContent value="overview" className="space-y-4">
-            <OverviewTab 
-              darkMode={darkMode} 
-              positions={positions} 
-              totalValue={totalValue} 
-              totalChange={totalChange} 
-              changePercentage={changePercentage}
-              realEstateHoldings={realEstateHoldings}
-              totalRealEstateValue={totalRealEstateValue}
-              totalRealEstateEquity={totalRealEstateEquity}
-              totalAnnualRent={totalAnnualRent}
-              avgRealEstateROI={avgRealEstateROI}
-              performanceData={performanceData}
-              assetAllocation={assetAllocation}
-            />
+            <AnimatePresence mode="wait">
+              <motion.div
+                key="overview"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.3 }}
+              >
+                <OverviewTab 
+                  darkMode={darkMode} 
+                  positions={positions} 
+                  totalValue={totalValue} 
+                  totalChange={totalChange} 
+                  changePercentage={changePercentage}
+                  realEstateHoldings={realEstateHoldings}
+                  totalRealEstateValue={totalRealEstateValue}
+                  totalRealEstateEquity={totalRealEstateEquity}
+                  totalAnnualRent={totalAnnualRent}
+                  avgRealEstateROI={avgRealEstateROI}
+                  performanceData={performanceData}
+                  assetAllocation={assetAllocation}
+                />
+              </motion.div>
+            </AnimatePresence>
           </TabsContent>
           
           <TabsContent value="stocks" className="space-y-4">
-            <StocksTab 
-              darkMode={darkMode} 
-              positions={positions} 
-              setPositions={setPositions} 
-              totalValue={totalValue} 
-              totalChange={totalChange} 
-              changePercentage={changePercentage}
-            />
+            <AnimatePresence mode="wait">
+              <motion.div
+                key="stocks"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.3 }}
+              >
+                <StocksTab 
+                  darkMode={darkMode} 
+                  positions={positions} 
+                  setPositions={setPositions} 
+                  totalValue={totalValue} 
+                  totalChange={totalChange} 
+                  changePercentage={changePercentage}
+                  updateChartsData={updateChartsData}
+                  apiKey={apiKey}
+                  apiError={refreshApiError}
+                  setApiError={setRefreshApiError}
+                />
+              </motion.div>
+            </AnimatePresence>
           </TabsContent>
           
           <TabsContent value="realestate" className="space-y-4">
-            <RealEstateTab 
-              darkMode={darkMode} 
-              realEstateHoldings={realEstateHoldings} 
-              setRealEstateHoldings={setRealEstateHoldings}
-              totalRealEstateValue={totalRealEstateValue}
-              totalRealEstateEquity={totalRealEstateEquity}
-              totalAnnualRent={totalAnnualRent}
-              avgRealEstateROI={avgRealEstateROI}
-            />
+            <AnimatePresence mode="wait">
+              <motion.div
+                key="realestate"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.3 }}
+              >
+                <RealEstateTab 
+                  darkMode={darkMode} 
+                  realEstateHoldings={realEstateHoldings} 
+                  setRealEstateHoldings={setRealEstateHoldings}
+                  totalRealEstateValue={totalRealEstateValue}
+                  totalRealEstateEquity={totalRealEstateEquity}
+                  totalAnnualRent={totalAnnualRent}
+                  avgRealEstateROI={avgRealEstateROI}
+                />
+              </motion.div>
+            </AnimatePresence>
           </TabsContent>
           
           <TabsContent value="insights" className="space-y-4">
-            <InsightsTab 
-              darkMode={darkMode} 
-              positions={positions}
-              realEstateHoldings={realEstateHoldings}
-              riskData={riskData}
-              assetAllocation={assetAllocation}
-              carbonData={carbonData}
-              correlationData={correlationData}
-              sharpeRatios={sharpeRatios}
-              volatilityData={volatilityData}
-            />
+            <AnimatePresence mode="wait">
+              <motion.div
+                key="insights"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.3 }}
+              >
+                <InsightsTab 
+                  darkMode={darkMode} 
+                  positions={positions}
+                  realEstateHoldings={realEstateHoldings}
+                  riskData={riskData}
+                  assetAllocation={assetAllocation}
+                  carbonData={carbonData}
+                  correlationData={correlationData}
+                  sharpeRatios={sharpeRatios}
+                  volatilityData={volatilityData}
+                />
+              </motion.div>
+            </AnimatePresence>
           </TabsContent>
         </Tabs>
       </main>

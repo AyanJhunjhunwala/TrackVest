@@ -238,6 +238,15 @@ export const fetchDailyMarketData = async (apiKey) => {
     
     try {
         console.log(`Fetching grouped daily market data for ${date} (${formattedDate})`);
+        
+        // Initialize cache with the date
+        marketDataCache = {
+            date,
+            stocks: {},
+            crypto: {}
+        };
+        
+        // Fetch stock data
         // Use our server proxy instead of Polygon directly
         const stocksUrl = `/api/polygon/daily?date=${date}&apiKey=${key}`;
         const stocksResponse = await fetch(stocksUrl);
@@ -257,13 +266,6 @@ export const fetchDailyMarketData = async (apiKey) => {
             throw new Error(`No stock market data available for ${formattedDate}`);
         }
         
-        // Process and cache the results
-        marketDataCache = {
-            date,
-            stocks: {},
-            crypto: marketDataCache.crypto // Keep existing crypto data
-        };
-        
         // Map stock results to cache by ticker symbol
         stocksData.results.forEach(stock => {
             marketDataCache.stocks[stock.T] = {
@@ -278,6 +280,42 @@ export const fetchDailyMarketData = async (apiKey) => {
         });
         
         console.log(`Cached ${Object.keys(marketDataCache.stocks).length} stocks for ${date} (${formattedDate})`);
+        
+        // Fetch crypto data using the same grouped endpoint but for crypto market
+        console.log(`Fetching grouped daily crypto market data for ${date} (${formattedDate})`);
+        const cryptoUrl = `/api/polygon/daily/crypto?date=${date}&apiKey=${key}`;
+        const cryptoResponse = await fetch(cryptoUrl);
+        
+        if (cryptoResponse.ok) {
+            const cryptoData = await cryptoResponse.json();
+            
+            if (cryptoData.status === "OK" && cryptoData.results) {
+                // Map crypto results to cache by ticker symbol (removing X: prefix if present)
+                cryptoData.results.forEach(crypto => {
+                    // Extract the crypto symbol - format is usually "X:BTCUSD" or similar
+                    let symbol = crypto.T;
+                    if (symbol.startsWith("X:") && symbol.endsWith("USD")) {
+                        symbol = symbol.substring(2, symbol.length - 3); // Remove X: prefix and USD suffix
+                    }
+                    
+                    marketDataCache.crypto[symbol] = {
+                        symbol: symbol,
+                        close: crypto.c,
+                        open: crypto.o,
+                        high: crypto.h,
+                        low: crypto.l,
+                        volume: crypto.v,
+                        vwap: crypto.vw
+                    };
+                });
+                
+                console.log(`Cached ${Object.keys(marketDataCache.crypto).length} cryptocurrencies for ${date} (${formattedDate})`);
+            } else {
+                console.warn(`No crypto market data available for ${formattedDate}`);
+            }
+        } else {
+            console.warn(`Failed to fetch crypto market data: ${cryptoResponse.status} ${cryptoResponse.statusText}`);
+        }
         
         return marketDataCache;
     } catch (error) {
@@ -298,7 +336,7 @@ export const fetchDailyMarketData = async (apiKey) => {
             marketDataCache = {
                 date,
                 stocks: {},
-                crypto: marketDataCache.crypto
+                crypto: {}
             };
             
             console.warn(`Markets were closed on ${formattedDate}. Using empty dataset.`);
@@ -324,23 +362,14 @@ async function fetchSpecificDateData(specificDate, apiKey) {
         
         const stocksData = await stocksResponse.json();
         
-        if (stocksData.status !== "OK" || !stocksData.results) {
-            // If no data for the fallback date either, return empty cache
-            marketDataCache = {
-                date: specificDate,
-                stocks: {},
-                crypto: marketDataCache.crypto
-            };
-            return marketDataCache;
-        }
-        
-        // Process and cache the results
+        // Initialize cache with the specific date
         marketDataCache = {
             date: specificDate,
             stocks: {},
-            crypto: marketDataCache.crypto // Keep existing crypto data
+            crypto: {}
         };
         
+        if (stocksData.status === "OK" && stocksData.results) {
         // Map stock results to cache by ticker symbol
         stocksData.results.forEach(stock => {
             marketDataCache.stocks[stock.T] = {
@@ -355,6 +384,42 @@ async function fetchSpecificDateData(specificDate, apiKey) {
         });
         
         console.log(`Cached ${Object.keys(marketDataCache.stocks).length} stocks for fallback date ${specificDate}`);
+        } else {
+            console.warn(`No stock data for fallback date ${specificDate}`);
+        }
+        
+        // Also try to fetch crypto data for the fallback date
+        const cryptoUrl = `/api/polygon/daily/crypto?date=${specificDate}&apiKey=${apiKey}`;
+        const cryptoResponse = await fetch(cryptoUrl);
+        
+        if (cryptoResponse.ok) {
+            const cryptoData = await cryptoResponse.json();
+            
+            if (cryptoData.status === "OK" && cryptoData.results) {
+                // Map crypto results to cache by ticker symbol
+                cryptoData.results.forEach(crypto => {
+                    // Extract the crypto symbol - format is usually "X:BTCUSD" or similar
+                    let symbol = crypto.T;
+                    if (symbol.startsWith("X:") && symbol.endsWith("USD")) {
+                        symbol = symbol.substring(2, symbol.length - 3); // Remove X: prefix and USD suffix
+                    }
+                    
+                    marketDataCache.crypto[symbol] = {
+                        symbol: symbol,
+                        close: crypto.c,
+                        open: crypto.o,
+                        high: crypto.h,
+                        low: crypto.l,
+                        volume: crypto.v,
+                        vwap: crypto.vw
+                    };
+                });
+                
+                console.log(`Cached ${Object.keys(marketDataCache.crypto).length} cryptocurrencies for fallback date ${specificDate}`);
+            } else {
+                console.warn(`No crypto data for fallback date ${specificDate}`);
+            }
+        }
         
         return marketDataCache;
     } catch (error) {
@@ -364,7 +429,7 @@ async function fetchSpecificDateData(specificDate, apiKey) {
         marketDataCache = {
             date: specificDate,
             stocks: {},
-            crypto: marketDataCache.crypto
+            crypto: {}
         };
         
         return marketDataCache;
@@ -394,27 +459,57 @@ export const fetchStockPrice = async (symbol, apiKey) => {
             return marketDataCache.stocks[upperSymbol].close;
         }
         
-        // If not in cache, fall back to individual API call (free tier)
-        console.log(`Symbol ${upperSymbol} not found in cache, fetching individually for ${formattedDate}`);
-        const url = `/api/polygon/open-close?symbol=${upperSymbol}&date=${date}&apiKey=${key}`;
+        // If not in cache, use the daily market summary API to get all tickers at once
+        console.log(`Symbol ${upperSymbol} not found in cache, fetching via Daily Market Summary API for ${date}`);
+        
+        const dailyMarketUrl = `https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/${date}?adjusted=true&apiKey=${key}`;
+        const marketResponse = await fetch(dailyMarketUrl);
+        
+        if (!marketResponse.ok) {
+            throw new Error(`Daily Market Summary API error: ${marketResponse.status}`);
+        }
+        
+        const marketData = await marketResponse.json();
+        
+        if (!marketData.results || marketData.results.length === 0) {
+            throw new Error('No data returned from Daily Market Summary API');
+        }
+        
+        console.log(`Retrieved data for ${marketData.results.length} tickers from Daily Market Summary API`);
+        
+        // Update our cache with all the tickers
+        marketData.results.forEach(stock => {
+            if (stock.T) {
+                marketDataCache.stocks[stock.T] = {
+                    symbol: stock.T,
+                    close: stock.c,
+                    open: stock.o,
+                    high: stock.h,
+                    low: stock.l,
+                    volume: stock.v,
+                    vwap: stock.vw
+                };
+            }
+        });
+        
+        // Now check if our requested symbol is in the updated cache
+        if (marketDataCache.stocks[upperSymbol]) {
+            console.log(`Found ${upperSymbol} in Daily Market Summary data`);
+            return marketDataCache.stocks[upperSymbol].close;
+        }
+        
+        // If still not found, fall back to individual API call as last resort
+        console.log(`Symbol ${upperSymbol} not found in Daily Market Summary, trying individual API call`);
+        const url = `https://api.polygon.io/v1/open-close/${upperSymbol}/${date}?adjusted=true&apiKey=${key}`;
         const response = await fetch(url);
         
         if (!response.ok) {
-            throw new Error(`Network error (${response.status}): ${response.statusText}`);
+            throw new Error(`Individual API call failed: ${response.status}`);
         }
         
         const data = await response.json();
         
         if (data.status !== "OK") {
-            // Handle specific error cases
-            if (data.message && (
-                data.message.includes("holiday") || 
-                data.message.includes("weekend") || 
-                data.message.includes("not open")
-            )) {
-                throw new Error(`Market was closed on ${formattedDate}. ${data.message}`);
-            }
-            
             throw new Error(`No price data available for ${upperSymbol} on ${formattedDate}`);
         }
         
@@ -451,7 +546,9 @@ export const fetchCryptoPrice = async (symbol, apiKey) => {
     try {
         // Format crypto ticker in Polygon format: X:BTCUSD
         const upperSymbol = symbol.toUpperCase();
-        const ticker = `X:${upperSymbol}USD`;
+        
+        // Get market data (will use cache if available)
+        await fetchDailyMarketData(key);
         
         // Get API date (for log messages)
         const date = getApiDate();
@@ -463,20 +560,65 @@ export const fetchCryptoPrice = async (symbol, apiKey) => {
             return marketDataCache.crypto[upperSymbol].close;
         }
         
-        // Fetch from free tier endpoint
-        console.log(`Fetching price for ${upperSymbol} individually for ${formattedDate}`);
-        const endpoint = `/api/polygon/open-close?symbol=${ticker}&date=${date}&apiKey=${key}`;
-        const response = await fetch(endpoint);
+        // If not in cache, use the daily market summary API to get all cryptos at once
+        console.log(`Symbol ${upperSymbol} not found in cache, fetching via Daily Crypto Market Summary API for ${date}`);
+        
+        const dailyMarketUrl = `https://api.polygon.io/v2/aggs/grouped/locale/global/market/crypto/${date}?adjusted=true&apiKey=${key}`;
+        const marketResponse = await fetch(dailyMarketUrl);
+        
+        if (!marketResponse.ok) {
+            throw new Error(`Daily Crypto Market Summary API error: ${marketResponse.status}`);
+        }
+        
+        const marketData = await marketResponse.json();
+        
+        if (!marketData.results || marketData.results.length === 0) {
+            throw new Error('No data returned from Daily Crypto Market Summary API');
+        }
+        
+        console.log(`Retrieved data for ${marketData.results.length} cryptocurrencies from Daily Market Summary API`);
+        
+        // Update our cache with all the cryptos
+        marketData.results.forEach(crypto => {
+            if (crypto.T) {
+                // Extract the crypto symbol - format is usually "X:BTCUSD" or similar
+                let cryptoSymbol = crypto.T;
+                if (cryptoSymbol.startsWith("X:") && cryptoSymbol.endsWith("USD")) {
+                    cryptoSymbol = cryptoSymbol.substring(2, cryptoSymbol.length - 3); // Remove X: prefix and USD suffix
+                }
+                
+                marketDataCache.crypto[cryptoSymbol] = {
+                    symbol: cryptoSymbol,
+                    close: crypto.c,
+                    open: crypto.o,
+                    high: crypto.h,
+                    low: crypto.l,
+                    volume: crypto.v,
+                    vwap: crypto.vw
+                };
+            }
+        });
+        
+        // Now check if our requested symbol is in the updated cache
+        if (marketDataCache.crypto[upperSymbol]) {
+            console.log(`Found ${upperSymbol} in Daily Crypto Market Summary data`);
+            return marketDataCache.crypto[upperSymbol].close;
+        }
+        
+        // If still not found, fall back to individual API call as last resort
+        console.log(`Symbol ${upperSymbol} not found in Daily Crypto Market Summary, trying individual API call`);
+        const ticker = `X:${upperSymbol}USD`;
+        const url = `https://api.polygon.io/v1/open-close/${ticker}/${date}?adjusted=true&apiKey=${key}`;
+        const response = await fetch(url);
         
         if (!response.ok) {
-            throw new Error(`Network error (${response.status}): ${response.statusText}`);
+            throw new Error(`Individual API call failed: ${response.status}`);
         }
         
         const data = await response.json();
         
         if (data.status !== "OK") {
             // Note: Crypto markets trade 24/7, so this is less likely to be a market closure issue
-            // But we still handle any potential API errors
             throw new Error(`No price data available for ${upperSymbol} on ${formattedDate}`);
         }
         

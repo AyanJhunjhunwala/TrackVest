@@ -199,6 +199,102 @@ app.get('/api/polygon/is-market-holiday', async (req, res) => {
   }
 });
 
+// Daily Market Summary API for stocks
+app.get('/api/polygon/daily', async (req, res) => {
+  try {
+    const { date, apiKey } = req.query;
+    
+    if (!date || !apiKey) {
+      return res.status(400).json({ error: 'Missing required parameters: date and apiKey' });
+    }
+    
+    // Forward the request to Polygon.io
+    const url = `https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/${date}?adjusted=true&apiKey=${apiKey}`;
+    
+    console.log(`Fetching daily market data for ${date} from Polygon.io`);
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Polygon API error (${response.status}): ${errorText}`);
+      return res.status(response.status).json({ 
+        error: `Polygon API error: ${response.status}`,
+        details: errorText
+      });
+    }
+    
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error('Error fetching daily market data:', error);
+    res.status(500).json({ error: 'Failed to fetch daily market data' });
+  }
+});
+
+// Daily Market Summary API for crypto
+app.get('/api/polygon/daily/crypto', async (req, res) => {
+  try {
+    const { date, apiKey } = req.query;
+    
+    if (!date || !apiKey) {
+      return res.status(400).json({ error: 'Missing required parameters: date and apiKey' });
+    }
+    
+    // Forward the request to Polygon.io's crypto endpoint
+    const url = `https://api.polygon.io/v2/aggs/grouped/locale/global/market/crypto/${date}?adjusted=true&apiKey=${apiKey}`;
+    
+    console.log(`Fetching daily crypto market data for ${date} from Polygon.io`);
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Polygon API error (${response.status}): ${errorText}`);
+      return res.status(response.status).json({ 
+        error: `Polygon API error: ${response.status}`,
+        details: errorText
+      });
+    }
+    
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error('Error fetching daily crypto market data:', error);
+    res.status(500).json({ error: 'Failed to fetch daily crypto market data' });
+  }
+});
+
+// Also add an endpoint for individual open-close data for fallback
+app.get('/api/polygon/open-close', async (req, res) => {
+  try {
+    const { symbol, date, apiKey } = req.query;
+    
+    if (!symbol || !date || !apiKey) {
+      return res.status(400).json({ error: 'Missing required parameters: symbol, date, and apiKey' });
+    }
+    
+    // Forward the request to Polygon.io
+    const url = `https://api.polygon.io/v1/open-close/${symbol}/${date}?adjusted=true&apiKey=${apiKey}`;
+    
+    console.log(`Fetching open-close data for ${symbol} on ${date} from Polygon.io`);
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Polygon API error (${response.status}): ${errorText}`);
+      return res.status(response.status).json({ 
+        error: `Polygon API error: ${response.status}`,
+        details: errorText
+      });
+    }
+    
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error('Error fetching open-close data:', error);
+    res.status(500).json({ error: 'Failed to fetch open-close data' });
+  }
+});
+
 // Real estate data mock endpoints
 app.get('/api/reportall/search', (req, res) => {
   // Generate mock property data
