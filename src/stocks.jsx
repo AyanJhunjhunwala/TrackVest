@@ -69,6 +69,15 @@ export default function StocksTab({
       price: result.price ? result.price : ""
     });
     setApiError("");
+    
+    // Store whether the price is simulated or from cache
+    if (result.simulated || result.fromCache) {
+      setSelectedResult({
+        ...result,
+        simulated: result.simulated || false,
+        fromCache: result.fromCache || false
+      });
+    }
   };
 
   // Add a position
@@ -97,7 +106,9 @@ export default function StocksTab({
       value: Number(form.quantity) * Number(form.price),
       change: 0,
       assetType: form.assetType,
-      logoUrl
+      logoUrl,
+      simulated: selectedResult?.simulated || false,
+      fromCache: selectedResult?.fromCache || false
     };
 
     setPositions([...positions, newPosition]);
@@ -211,7 +222,7 @@ export default function StocksTab({
             
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="md:col-span-4">
-                <Label htmlFor="assetType" className="mb-2 block text-sm font-medium">
+                <Label htmlFor="assetType" className={`mb-2 block text-sm font-medium ${darkMode ? 'text-white' : ''}`}>
                   Asset Type
                 </Label>
                 <Select value={form.assetType} onValueChange={handleAssetTypeChange}>
@@ -226,7 +237,7 @@ export default function StocksTab({
               </div>
               
               <div className="md:col-span-4">
-                <Label htmlFor="symbol" className="mb-2 block text-sm font-medium">
+                <Label htmlFor="symbol" className={`mb-2 block text-sm font-medium ${darkMode ? 'text-white' : ''}`}>
                   Search for {form.assetType === "stocks" ? "Stock" : "Cryptocurrency"}
                 </Label>
                 <div className="relative" style={{ zIndex: 20 }}>
@@ -241,7 +252,7 @@ export default function StocksTab({
               </div>
               
               <div>
-                <Label htmlFor="symbol" className="mb-2 block text-sm font-medium">
+                <Label htmlFor="symbol" className={`mb-2 block text-sm font-medium ${darkMode ? 'text-white' : ''}`}>
                   Symbol
                 </Label>
                 <Input
@@ -256,7 +267,7 @@ export default function StocksTab({
               </div>
               
               <div>
-                <Label htmlFor="quantity" className="mb-2 block text-sm font-medium">
+                <Label htmlFor="quantity" className={`mb-2 block text-sm font-medium ${darkMode ? 'text-white' : ''}`}>
                   Quantity
                 </Label>
                 <Input
@@ -272,7 +283,7 @@ export default function StocksTab({
               </div>
               
               <div>
-                <Label htmlFor="price" className="mb-2 block text-sm font-medium">
+                <Label htmlFor="price" className={`mb-2 block text-sm font-medium ${darkMode ? 'text-white' : ''}`}>
                   Purchase Price
                 </Label>
                 <Input
@@ -355,21 +366,37 @@ export default function StocksTab({
                           className={`${darkMode ? 'text-slate-300' : 'text-slate-700'} hover:bg-slate-100/5 transition-colors duration-150`}
                         >
                           <td className="px-6 py-4">
-                            <div className="flex items-center">
-                              <div className="h-10 w-10 flex-shrink-0 mr-3">
-                                <img 
-                                  src={position.logoUrl} 
-                                  alt={position.symbol}
-                                  className="h-full w-full object-contain rounded-full"
-                                  onError={(e) => {
-                                    e.target.onerror = null;
-                                    e.target.src = `https://ui-avatars.com/api/?name=${position.symbol}&background=random&color=fff&size=64`;
-                                  }}
-                                />
-                              </div>
+                            <div className="flex items-center gap-2">
+                              <img
+                                src={position.logoUrl}
+                                alt={position.symbol}
+                                className="w-8 h-8 rounded-md object-cover"
+                                onError={(e) => {
+                                  e.target.onerror = null;
+                                  e.target.src = `https://ui-avatars.com/api/?name=${position.symbol}&background=random&color=fff&size=128`;
+                                }}
+                              />
                               <div>
-                                <div className="font-medium">{position.symbol}</div>
-                                <div className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{position.name}</div>
+                                <div className="flex items-center gap-1">
+                                  <span className={`font-medium ${darkMode ? 'text-white' : 'text-slate-900'}`}>{position.symbol}</span>
+                                  {position.simulated && (
+                                    <span className={`text-xxs px-1 py-0.5 rounded ${
+                                      darkMode ? 'bg-amber-900/30 text-amber-400' : 'bg-amber-100 text-amber-800'
+                                    }`}>
+                                      est
+                                    </span>
+                                  )}
+                                  {position.fromCache && (
+                                    <span className={`text-xxs px-1 py-0.5 rounded ${
+                                      darkMode ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-800'
+                                    }`}>
+                                      cached
+                                    </span>
+                                  )}
+                                </div>
+                                <div className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                                  {position.name}
+                                </div>
                               </div>
                             </div>
                           </td>
@@ -456,21 +483,37 @@ export default function StocksTab({
                           className={`${darkMode ? 'text-slate-300' : 'text-slate-700'} hover:bg-slate-100/5 transition-colors duration-150`}
                         >
                           <td className="px-6 py-4">
-                            <div className="flex items-center">
-                              <div className="h-10 w-10 flex-shrink-0 mr-3">
-                                <img 
-                                  src={position.logoUrl} 
-                                  alt={position.symbol}
-                                  className="h-full w-full object-contain rounded-full"
-                                  onError={(e) => {
-                                    e.target.onerror = null;
-                                    e.target.src = `https://ui-avatars.com/api/?name=${position.symbol}&background=random&color=fff&size=64`;
-                                  }}
-                                />
-                              </div>
+                            <div className="flex items-center gap-2">
+                              <img
+                                src={position.logoUrl}
+                                alt={position.symbol}
+                                className="w-8 h-8 rounded-md object-cover"
+                                onError={(e) => {
+                                  e.target.onerror = null;
+                                  e.target.src = `https://ui-avatars.com/api/?name=${position.symbol}&background=random&color=fff&size=128`;
+                                }}
+                              />
                               <div>
-                                <div className="font-medium">{position.symbol}</div>
-                                <div className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{position.name}</div>
+                                <div className="flex items-center gap-1">
+                                  <span className={`font-medium ${darkMode ? 'text-white' : 'text-slate-900'}`}>{position.symbol}</span>
+                                  {position.simulated && (
+                                    <span className={`text-xxs px-1 py-0.5 rounded ${
+                                      darkMode ? 'bg-amber-900/30 text-amber-400' : 'bg-amber-100 text-amber-800'
+                                    }`}>
+                                      est
+                                    </span>
+                                  )}
+                                  {position.fromCache && (
+                                    <span className={`text-xxs px-1 py-0.5 rounded ${
+                                      darkMode ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-800'
+                                    }`}>
+                                      cached
+                                    </span>
+                                  )}
+                                </div>
+                                <div className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                                  {position.name}
+                                </div>
                               </div>
                             </div>
                           </td>

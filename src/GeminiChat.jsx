@@ -170,10 +170,25 @@ Use this knowledge to provide helpful, accurate information when asked about fin
 // Fetch crypto data from CoinGecko API
 const fetchTopCryptos = async (limit = 10) => {
   try {
+    // Check localStorage cache first
+    const cachedData = localStorage.getItem('cachedCryptoData');
+    const cachedTime = localStorage.getItem('cachedCryptoTime');
+    
+    // If we have cached data and it's less than 15 minutes old, use it
+    if (cachedData && cachedTime) {
+      const cacheAge = Date.now() - parseInt(cachedTime);
+      if (cacheAge < 15 * 60 * 1000) { // 15 minutes in milliseconds
+        console.log('Using cached crypto data, age:', Math.round(cacheAge / 1000 / 60), 'minutes');
+        return JSON.parse(cachedData);
+      }
+      console.log('Cached crypto data expired, fetching fresh data');
+    }
+    
+    // Fetch fresh data
     const response = await fetch(`${CRYPTO_PRICE_API}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=${limit}&page=1&sparkline=true`);
     const data = await response.json();
     
-    return data.map(coin => ({
+    const formattedData = data.map(coin => ({
       id: coin.id,
       symbol: coin.symbol.toUpperCase(),
       name: coin.name,
@@ -183,8 +198,22 @@ const fetchTopCryptos = async (limit = 10) => {
       market_cap: coin.market_cap,
       sparkline: coin.sparkline_in_7d?.price || []
     }));
+    
+    // Cache the result
+    localStorage.setItem('cachedCryptoData', JSON.stringify(formattedData));
+    localStorage.setItem('cachedCryptoTime', Date.now().toString());
+    
+    return formattedData;
   } catch (error) {
     console.error('Error fetching crypto data:', error);
+    
+    // Try to use cached data even if it's expired
+    const cachedData = localStorage.getItem('cachedCryptoData');
+    if (cachedData) {
+      console.log('Using expired cached crypto data due to fetch error');
+      return JSON.parse(cachedData);
+    }
+    
     return [];
   }
 };
@@ -198,6 +227,20 @@ const fetchPopularStocks = async () => {
   const popularTickers = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'JPM', 'V', 'NVDA', 'BAC'];
   
   try {
+    // Check localStorage cache first
+    const cachedData = localStorage.getItem('cachedStockData');
+    const cachedTime = localStorage.getItem('cachedStockTime');
+    
+    // If we have cached data and it's less than 15 minutes old, use it
+    if (cachedData && cachedTime) {
+      const cacheAge = Date.now() - parseInt(cachedTime);
+      if (cacheAge < 15 * 60 * 1000) { // 15 minutes in milliseconds
+        console.log('Using cached stock data, age:', Math.round(cacheAge / 1000 / 60), 'minutes');
+        return JSON.parse(cachedData);
+      }
+      console.log('Cached stock data expired, fetching fresh data');
+    }
+    
     // Use our fetchGroupedStockData function to get data for all stocks at once
     const { getApiDate } = await import('./hooks');
     const { fetchGroupedStockData } = await import('./fetchGroupedStocks');
@@ -224,10 +267,23 @@ const fetchPopularStocks = async () => {
     }));
     
     console.log(`Successfully fetched data for ${results.length} popular stocks`);
+    
+    // Cache the results
+    localStorage.setItem('cachedStockData', JSON.stringify(results));
+    localStorage.setItem('cachedStockTime', Date.now().toString());
+    
     return results;
   } catch (error) {
     console.error('Error fetching stock data:', error);
-    // Fallback to mock data if API fails
+    
+    // Try to use cached data even if it's expired
+    const cachedData = localStorage.getItem('cachedStockData');
+    if (cachedData) {
+      console.log('Using expired cached stock data due to fetch error');
+      return JSON.parse(cachedData);
+    }
+    
+    // Fallback to mock data if API fails and no cache is available
     return popularTickers.map(ticker => {
       const mockChange = (Math.random() * 6) - 3; // -3% to +3%
       const mockPrice = ticker === 'AAPL' ? 180 + mockChange : 

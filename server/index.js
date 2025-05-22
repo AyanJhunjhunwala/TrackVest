@@ -17,6 +17,17 @@ let marketHolidaysCache = {
   validUntil: null
 };
 
+// Cache for search results to reduce API calls
+let searchCache = {
+  stocks: {},  // Cache by query string
+  crypto: {}   // Separate cache for crypto searches
+};
+
+// Helper function to clean and normalize search queries for caching
+const normalizeSearchQuery = (query) => {
+  return query.trim().toLowerCase();
+};
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -295,84 +306,141 @@ app.get('/api/polygon/open-close', async (req, res) => {
   }
 });
 
-// Real estate data mock endpoints
-app.get('/api/reportall/search', (req, res) => {
-  // Generate mock property data
-  const mockProperties = [
-    {
-      properties: {
-        robust_id: 'mock_prop_1',
-        address: '123 Main St',
-        addr_number: '123',
-        addr_street_name: 'Main',
-        addr_street_type: 'St',
-        city: 'Springfield',
-        state: 'IL',
-        zip: '62701',
-        apn: '12-34-567-890',
-        longitude: -89.645,
-        latitude: 39.799,
-        bedrooms: 3,
-        bathrooms: 2,
-        year_built: 1985
-      }
-    },
-    {
-      properties: {
-        robust_id: 'mock_prop_2',
-        address: '456 Elm St',
-        addr_number: '456',
-        addr_street_name: 'Elm',
-        addr_street_type: 'St',
-        city: 'Springfield',
-        state: 'IL',
-        zip: '62702',
-        apn: '23-45-678-901',
-        longitude: -89.652,
-        latitude: 39.805,
-        bedrooms: 4,
-        bathrooms: 2.5,
-        year_built: 1992
+// Helper function to generate fallback stock results
+const generateFallbackResults = (query, marketType) => {
+  const formattedQuery = query.toUpperCase();
+  
+  if (marketType === 'crypto') {
+    // Generate simulated crypto results
+    return {
+      status: "OK",
+      count: 1,
+      results: [{
+        ticker: `X:${formattedQuery}-USD`,
+        name: `${formattedQuery} USD`,
+        market: "crypto",
+        locale: "global",
+        type: "CRYPTO",
+        active: true,
+        currency_name: "usd",
+        last_updated_utc: new Date().toISOString()
+      }],
+      simulated: true
+    };
+  } else {
+    // Generate simulated stock results
+    return {
+      status: "OK",
+      count: 1,
+      results: [{
+        ticker: formattedQuery,
+        name: `${formattedQuery} Inc.`,
+        market: "stocks",
+        locale: "us",
+        primary_exchange: "XNAS",
+        type: "CS",
+        active: true,
+        currency_name: "usd",
+        last_updated_utc: new Date().toISOString()
+      }],
+      simulated: true
+    };
+  }
+};
+
+// Search for stocks or crypto using Polygon.io
+app.get('/api/polygon/search', async (req, res) => {
+  try {
+    const { query, market, apiKey } = req.query;
+    
+    if (!query || !apiKey) {
+      return res.status(400).json({ error: 'Missing required parameters: query and apiKey' });
+    }
+    
+    const normalizedQuery = normalizeSearchQuery(query);
+    const cacheType = market === 'crypto' ? 'crypto' : 'stocks';
+    
+    // Check if we have cached results for this query
+    if (searchCache[cacheType][normalizedQuery]) {
+      const cachedData = searchCache[cacheType][normalizedQuery];
+      const cacheAge = Date.now() - cachedData.timestamp;
+      
+      // Use cache if it's less than 15 minutes old
+      if (cacheAge < 15 * 60 * 1000) {
+        console.log(`Using cached search results for "${query}" (${market || 'stocks'})`);
+        return res.json({
+          ...cachedData.data,
+          cached: true
+        });
       }
     }
-  ];
-
-  res.json({
-    status: 'OK',
-    count: mockProperties.length,
-    results: mockProperties
-  });
-});
-
-app.get('/api/reportall/estimate', (req, res) => {
-  const { robust_id } = req.query;
-  
-  if (!robust_id) {
-    return res.status(400).json({ error: 'Missing required parameter: robust_id' });
+    
+    // Build the search URL matching exactly the Polygon.io API format
+    // Example: https://api.polygon.io/v3/reference/tickers?market=stocks&search=IONQ&active=true&order=asc&limit=100&sort=ticker&apiKey=API_KEY
+    const marketType = market === 'crypto' ? 'crypto' : 'stocks';
+    const searchUrl = `https://api.polygon.io/v3/reference/tickers?market=${marketType}&search=${encodeURIComponent(query)}&active=true&order=asc&limit=100&sort=ticker&apiKey=${apiKey}`;
+    
+    console.log(`Searching for ${marketType} assets matching "${query}"`);
+    const response = await fetch(searchUrl);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Polygon API search error (${response.status}): ${errorText}`);
+      
+      // Handle specific error codes
+      if (response.status === 401 || response.status === 403) {
+        return res.status(response.status).json({ 
+          error: 'API key error: Invalid or unauthorized API key',
+          status: "ERROR",
+          code: response.status
+        });
+      }
+      
+      if (response.status === 429) {
+        return res.status(429).json({ 
+          error: 'Rate limit exceeded. Please try again later.',
+          status: "ERROR",
+          code: 429
+        });
+      }
+      
+      // Return fallback mock data for other errors
+      const fallbackData = generateFallbackResults(query, marketType);
+      console.log(`Using fallback data for "${query}" due to API error`);
+      return res.json(fallbackData);
+    }
+    
+    const data = await response.json();
+    
+    // If no results were found, consider using fallback data
+    if (!data.results || data.results.length === 0) {
+      console.log(`No results found for "${query}", using fallback data`);
+      const fallbackData = generateFallbackResults(query, marketType);
+      
+      // Cache the fallback results too
+      searchCache[cacheType][normalizedQuery] = {
+        timestamp: Date.now(),
+        data: fallbackData
+      };
+      
+      return res.json(fallbackData);
+    }
+    
+    // Cache the results
+    searchCache[cacheType][normalizedQuery] = {
+      timestamp: Date.now(),
+      data: data
+    };
+    
+    res.json(data);
+  } catch (error) {
+    console.error('Error searching:', error);
+    
+    // Return fallback mock data if any error occurs
+    const marketType = req.query.market === 'crypto' ? 'crypto' : 'stocks';
+    const fallbackData = generateFallbackResults(req.query.query, marketType);
+    res.json(fallbackData);
   }
-  
-  // Generate mock property estimate with realistic data
-  const randomEstimates = {
-    totalValue: Math.floor(Math.random() * 400000) + 300000,
-    landValue: Math.floor(Math.random() * 150000) + 100000,
-    buildingValue: Math.floor(Math.random() * 250000) + 200000,
-  };
-  
-  const mockEstimate = {
-    status: 'OK',
-    robust_id: robust_id,
-    address: robust_id === 'mock_prop_1' ? '123 Main St, Springfield, IL 62701' : '456 Elm St, Springfield, IL 62702',
-    totalValue: randomEstimates.totalValue,
-    landValue: randomEstimates.landValue,
-    buildingValue: randomEstimates.buildingValue,
-    yearBuilt: Math.floor(Math.random() * 50) + 1970,
-    acreage: (Math.random() * 2 + 0.1).toFixed(2),
-    estimatedMonthlyRent: Math.floor(randomEstimates.totalValue * 0.005),
-    estimatedAnnualRent: Math.floor(randomEstimates.totalValue * 0.06),
-    simulated: false
-  };
-  
-  res.json(mockEstimate);
 });
 
 // Server start

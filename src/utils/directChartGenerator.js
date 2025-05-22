@@ -145,7 +145,7 @@ async function generateSampleStockData(symbol) {
     The data should be in a format where each point has a date (YYYY-MM-DD) and value (price in dollars).`;
     
     // Get the model instance first
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-preview-05-20" });
     
     // Call generateContent on the model with the proper params
     const result = await model.generateContent({
@@ -220,7 +220,7 @@ async function generateComparisonData(symbols) {
     The data should include a date field and separate values for each stock symbol.`;
     
     // Get the model instance first
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-preview-05-20" });
     
     // Call generateContent on the model with the proper params
     const result = await model.generateContent({
@@ -432,7 +432,7 @@ const generateChartCodeWithGemini = async (chartRequest) => {
     }
     
     // Get the model instance first
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-preview-05-20" });
     
     // Call generateContent on the model with the proper params
     const result = await model.generateContent({

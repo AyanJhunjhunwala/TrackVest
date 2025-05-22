@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertCircle, PlusCircle, Trash2, Search, Loader2, Home, MapPin, Locate, Info, X } from "lucide-react";
+import { AlertCircle, PlusCircle, Trash2, Search, Loader2, Home, MapPin, Locate, Info, X, Globe } from "lucide-react";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export default function RealEstateTab({ 
   darkMode, 
@@ -53,7 +54,7 @@ export default function RealEstateTab({
     setEstimateError("");
   };
 
-  // Fetch property data using ReportAll API
+  // Fetch property data using Google Gemini
   const fetchPropertyEstimate = async () => {
     // Validate input based on search mode
     if (searchMode === "full" && !realEstateForm.address) {
@@ -70,53 +71,192 @@ export default function RealEstateTab({
     setShowSearchResults(false);
 
     try {
-      // Build query based on search mode
-      let queryParams;
+      // Build search query based on search mode
+      let searchQuery;
       if (searchMode === "full") {
-        // Format address as "street, region" for q parameter - following the example format that works
-        queryParams = `q=${encodeURIComponent(realEstateForm.address)}`;
+        searchQuery = `real estate property ${realEstateForm.address}`;
       } else {
-        // Use separate address & region parameters
-        queryParams = `address=${encodeURIComponent(realEstateForm.address)}&region=${encodeURIComponent(realEstateForm.region)}`;
+        searchQuery = `real estate property ${realEstateForm.address} ${realEstateForm.region}`;
       }
 
-      console.log(`Searching properties with: ${queryParams}`);
+      console.log(`Searching properties with: ${searchQuery}`);
       
-      // Search for properties matching this address
-      const response = await fetch(`/api/reportall/search?${queryParams}`);
+      // Initialize Google Gemini API
+      const geminiApiKey = localStorage.getItem('geminiApiKey') || "AIzaSyDJ7tT1DyZ4FnSWIc4UazjYL4gGCo6vN0Y";
+      const genAI = new GoogleGenerativeAI(geminiApiKey);
       
-      if (!response.ok) {
-        throw new Error(`Failed to fetch property data: ${response.status}`);
+      // Use generative content API with google search grounding
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-preview-05-20" });
+      
+      const searchPrompt = `
+        Search for real estate properties matching this description: "${searchQuery}".
+        Find actual property listings from sites like Trulia, Zillow, or Realtor.com.
+        Include the complete address, property details, and estimated values.
+        Also provide a short summary (1-2 sentences) for each property describing key features.
+        Return the results in JSON format like this:
+        {
+          "status": "OK",
+          "results": [
+            {
+              "properties": {
+                "robust_id": "unique_id_1",
+                "address": "Complete address",
+                "addr_number": "Street number",
+                "addr_street_name": "Street name",
+                "addr_street_type": "Street type",
+                "addr_city": "City name",
+                "state_abbr": "State code",
+                "addr_zip": "Zip code",
+                "bedrooms": 3,
+                "bathrooms": 2,
+                "year_built": 1985,
+                "summary": "A charming 3-bedroom home with renovated kitchen and large backyard."
+              }
+            }
+          ],
+          "sources": [
+            {
+              "name": "Trulia",
+              "url": "https://www.trulia.com/..."
+            },
+            {
+              "name": "Realtor.com",
+              "url": "https://www.realtor.com/..."
+            }
+          ]
+        }
+      `;
+      
+      // Use the Google Search tool for grounding
+      const response = await model.generateContent({
+        contents: [{ role: "user", parts: [{ text: searchPrompt }] }],
+        generationConfig: {
+          temperature: 0.2,
+          maxOutputTokens: 2048,
+        },
+        tools: [{
+          googleSearch: {}
+        }],
+      });
+      
+      const result = response.response;
+      const text = result.text();
+      console.log("Gemini search response:", text);
+      
+      // Log the grounding metadata if available
+      if (response.candidates && 
+          response.candidates[0].groundingMetadata && 
+          response.candidates[0].groundingMetadata.searchEntryPoint) {
+        console.log("Grounding sources:", 
+          response.candidates[0].groundingMetadata.searchEntryPoint.renderedContent);
       }
       
-      const data = await response.json();
-      console.log("ReportAll search results:", data);
+      // Parse the JSON response
+      let parsedData;
+      try {
+        // Extract JSON from the response text (which might contain markdown or other formatting)
+        const jsonMatch = text.match(/```json\n([\s\S]*?)\n```/) || 
+                         text.match(/```\n([\s\S]*?)\n```/) || 
+                         text.match(/{[\s\S]*?}/);
+                         
+        let jsonString = jsonMatch ? jsonMatch[1] || jsonMatch[0] : text;
+        
+        // Remove any trailing commas which are invalid in JSON
+        jsonString = jsonString.replace(/,(\s*[}\]])/g, "$1");
+        
+        // Make sure the string is actually valid JSON by checking for opening brace
+        if (!jsonString.trim().startsWith('{')) {
+          // Try to find any JSON-like object in the text
+          const potentialJson = text.match(/{[^{]*"status"[^}]*}/);
+          if (potentialJson) {
+            jsonString = potentialJson[0];
+          }
+        }
+        
+        try {
+          parsedData = JSON.parse(jsonString);
+        } catch (innerError) {
+          console.error("First JSON parse attempt failed:", innerError);
+          // If parsing fails, try to sanitize the string further
+          jsonString = jsonString.replace(/[\r\n\t]/g, ' ')  // Remove newlines, tabs
+                              .replace(/\s+/g, ' ')         // Normalize whitespace
+                              .replace(/(['"])?([a-zA-Z0-9_]+)(['"])?:/g, '"$2":') // Ensure property names are quoted
+                              .replace(/'/g, '"');         // Replace single quotes with double quotes
+          
+          // Create a minimal valid response if all else fails
+          try {
+            parsedData = JSON.parse(jsonString);
+          } catch (finalError) {
+            console.error("Final JSON parse attempt failed:", finalError);
+            // Create fallback data
+            parsedData = {
+              status: "OK",
+              results: [{
+                properties: {
+                  robust_id: `fallback_${Date.now()}`,
+                  address: searchQuery,
+                  addr_city: "",
+                  state_abbr: "",
+                  addr_zip: "",
+                  summary: "Property details could not be retrieved. Using simulated values."
+                }
+              }]
+            };
+          }
+        }
+      } catch (jsonError) {
+        console.error("Error parsing Gemini response as JSON:", jsonError);
+        // Create fallback data instead of throwing
+        parsedData = {
+          status: "OK",
+          results: [{
+            properties: {
+              robust_id: `fallback_${Date.now()}`,
+              address: searchQuery,
+              addr_city: "",
+              state_abbr: "",
+              addr_zip: "",
+              summary: "Property details could not be retrieved. Using simulated values."
+            }
+          }]
+        };
+      }
       
-      if (data.results && data.results.length > 0) {
-        setSearchResults(data.results);
+      console.log("Gemini search results:", parsedData);
+      
+      if (parsedData.results && parsedData.results.length > 0) {
+        setSearchResults(parsedData.results);
         setShowSearchResults(true);
         
         // If only one result is found, automatically select it
-        if (data.results.length === 1) {
-          handleSelectProperty(data.results[0]);
+        if (parsedData.results.length === 1) {
+          handleSelectProperty(parsedData.results[0]);
+          return; // Don't set isFetchingEstimate to false as handleSelectProperty will handle it
         }
       } else {
         setEstimateError("No properties found matching this address.");
-        // Fallback to simulated data
-        simulatePropertyEstimate();
+        // Fallback to simulated data with loading icon still showing
+        simulatePropertyEstimate(true);
+        // We'll set the loading state to false after a delay to simulate API time
+        setTimeout(() => setIsFetchingEstimate(false), 1200);
+        return;
       }
     } catch (error) {
       console.error("Error fetching property data:", error);
       setEstimateError("Failed to fetch property data. Using simulated values instead.");
-      // Fallback to simulated data
-      simulatePropertyEstimate();
-    } finally {
-      setIsFetchingEstimate(false);
+      // Fallback to simulated data with loading icon still showing
+      simulatePropertyEstimate(true);
+      // We'll set the loading state to false after a delay to simulate API time
+      setTimeout(() => setIsFetchingEstimate(false), 1200);
+      return;
     }
+    
+    // If we reach here, we didn't select a single property or simulate data
+    setIsFetchingEstimate(false);
   };
   
   // Simulate property data (used as fallback)
-  const simulatePropertyEstimate = () => {
+  const simulatePropertyEstimate = (keepLoadingState = false) => {
     // Simulated delay
     setTimeout(() => {
       const estimate = Math.floor(Math.random() * 400000) + 300000;
@@ -141,10 +281,14 @@ export default function RealEstateTab({
         acreage: (Math.random() * 2 + 0.1).toFixed(2),
         estimatedMonthlyRent: Math.floor(estimate * 0.005),
         estimatedAnnualRent: annualRentEstimate,
+        summary: `${realEstateForm.type} property with estimated value of $${estimate.toLocaleString()}.`,
         simulated: true
       });
       
-      setIsFetchingEstimate(false);
+      // Only set loading to false if we're not part of a property selection flow
+      if (!keepLoadingState) {
+        setIsFetchingEstimate(false);
+      }
     }, 1000);
   };
   
@@ -155,23 +299,158 @@ export default function RealEstateTab({
     setIsFetchingEstimate(true);
     
     try {
-      // Get property details including valuation estimate
+      // Get property details using Google Gemini
       const robustId = property.properties.robust_id;
-      console.log(`Fetching details for property: ${robustId}`);
+      const address = property.properties.address || 
+                     `${property.properties.addr_number || ''} ${property.properties.addr_street_name || ''} ${property.properties.addr_street_type || ''}`.trim();
       
-      const response = await fetch(`/api/reportall/estimate?robust_id=${encodeURIComponent(robustId)}`);
+      console.log(`Fetching details for property: ${address}`);
       
-      if (!response.ok) {
-        throw new Error(`Failed to fetch property estimate: ${response.status}`);
+      // Initialize Google Gemini API
+      const geminiApiKey = localStorage.getItem('geminiApiKey') || "AIzaSyDJ7tT1DyZ4FnSWIc4UazjYL4gGCo6vN0Y";
+      const genAI = new GoogleGenerativeAI(geminiApiKey);
+      
+      // Use generative content API with google search grounding
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-preview-05-20" });
+      
+      // Create prompt for property details with grounding
+      const detailsPrompt = `
+        Search for detailed information about this property: "${address}".
+        Find actual property listings and detailed information from sites like Trulia, Zillow, or Realtor.com.
+        Include the property value, year built, land and building value, acreage, and estimated rental income.
+        Also provide a short property summary (1-2 sentences) describing the key features.
+        Return the results in JSON format like this:
+        {
+          "status": "OK",
+          "robust_id": "${robustId}",
+          "address": "${address}",
+          "summary": "A beautiful 3-bedroom, 2-bathroom home in a quiet neighborhood with recent renovations.",
+          "totalValue": 350000,
+          "landValue": 120000,
+          "buildingValue": 230000,
+          "yearBuilt": 1985,
+          "acreage": "0.25",
+          "estimatedMonthlyRent": 1750,
+          "estimatedAnnualRent": 21000,
+          "simulated": false,
+          "sources": [
+            {
+              "name": "Trulia",
+              "url": "https://www.trulia.com/..."
+            },
+            {
+              "name": "Realtor.com",
+              "url": "https://www.realtor.com/..."
+            }
+          ]
+        }
+      `;
+      
+      // Use the Google Search tool for grounding
+      const response = await model.generateContent({
+        contents: [{ role: "user", parts: [{ text: detailsPrompt }] }],
+        generationConfig: {
+          temperature: 0.2,
+          maxOutputTokens: 2048,
+        },
+        tools: [{
+          googleSearch: {}
+        }],
+      });
+      
+      const result = response.response;
+      const text = result.text();
+      console.log("Property details response:", text);
+      
+      // Log the grounding metadata if available
+      if (response.candidates && 
+          response.candidates[0].groundingMetadata && 
+          response.candidates[0].groundingMetadata.searchEntryPoint) {
+        console.log("Grounding sources:", 
+          response.candidates[0].groundingMetadata.searchEntryPoint.renderedContent);
       }
       
-      const data = await response.json();
+      // Parse the JSON response
+      let data;
+      try {
+        // Extract JSON from the response text (which might contain markdown or other formatting)
+        const jsonMatch = text.match(/```json\n([\s\S]*?)\n```/) || 
+                         text.match(/```\n([\s\S]*?)\n```/) || 
+                         text.match(/{[\s\S]*?}/);
+                         
+        let jsonString = jsonMatch ? jsonMatch[1] || jsonMatch[0] : text;
+        
+        // Remove any trailing commas which are invalid in JSON
+        jsonString = jsonString.replace(/,(\s*[}\]])/g, "$1");
+        
+        // Make sure the string is actually valid JSON by checking for opening brace
+        if (!jsonString.trim().startsWith('{')) {
+          // Try to find any JSON-like object in the text
+          const potentialJson = text.match(/{[^{]*"status"[^}]*}/);
+          if (potentialJson) {
+            jsonString = potentialJson[0];
+          }
+        }
+        
+        try {
+          data = JSON.parse(jsonString);
+        } catch (innerError) {
+          console.error("First JSON parse attempt failed:", innerError);
+          // If parsing fails, try to sanitize the string further
+          jsonString = jsonString.replace(/[\r\n\t]/g, ' ')  // Remove newlines, tabs
+                              .replace(/\s+/g, ' ')         // Normalize whitespace
+                              .replace(/(['"])?([a-zA-Z0-9_]+)(['"])?:/g, '"$2":') // Ensure property names are quoted
+                              .replace(/'/g, '"');         // Replace single quotes with double quotes
+          
+          // Create a minimal valid response if all else fails
+          try {
+            data = JSON.parse(jsonString);
+          } catch (finalError) {
+            console.error("Final JSON parse attempt failed:", finalError);
+            // Create fallback data
+            data = {
+              status: "OK",
+              robust_id: robustId || `fallback_${Date.now()}`,
+              address: address,
+              summary: "Property details could not be retrieved. Using estimated values.",
+              totalValue: 350000,
+              landValue: 120000,
+              buildingValue: 230000,
+              yearBuilt: new Date().getFullYear() - 20,
+              acreage: "0.25",
+              estimatedMonthlyRent: 1750,
+              estimatedAnnualRent: 21000,
+              simulated: true
+            };
+          }
+        }
+      } catch (jsonError) {
+        console.error("Error parsing Gemini response as JSON:", jsonError);
+        // Create fallback data instead of throwing
+        data = {
+          status: "OK",
+          robust_id: robustId || `fallback_${Date.now()}`,
+          address: address,
+          summary: "Property details could not be retrieved. Using estimated values.",
+          totalValue: 350000,
+          landValue: 120000,
+          buildingValue: 230000,
+          yearBuilt: new Date().getFullYear() - 20,
+          acreage: "0.25",
+          estimatedMonthlyRent: 1750,
+          estimatedAnnualRent: 21000,
+          simulated: true
+        };
+      }
+      
       console.log("Property estimation data:", data);
       
       if (data.status === 'OK') {
+        // Check if we have actual data from sources or if it's simulated
+        const hasRealData = data.sources && data.sources.length > 0 && !data.simulated;
+        
         // Format address from property data
-        const formattedAddress = property.properties.address || 
-                                `${property.properties.addr_number || ''} ${property.properties.addr_street_name || ''} ${property.properties.addr_street_type || ''}`.trim();
+        const formattedAddress = address;
         
         // Update form with real data
         setRealEstateForm({
@@ -184,8 +463,13 @@ export default function RealEstateTab({
         });
         
         setPropertyDetails(data);
+        
+        // Log whether we're using real data or not
+        console.log(hasRealData ? "Using real property data from sources" : "Using estimated property data");
       } else {
-        throw new Error("Failed to get property estimate");
+        // If no valid data was returned, use simulated data
+        console.warn("Failed to get property estimate, using simulation");
+        simulatePropertyDataForAddress(address);
       }
     } catch (error) {
       console.error("Error fetching property estimate:", error);
@@ -194,17 +478,45 @@ export default function RealEstateTab({
                              `${property.properties.addr_number || ''} ${property.properties.addr_street_name || ''} ${property.properties.addr_street_type || ''}`.trim();
       
       // Fallback to simulated data for this property
-      setRealEstateForm({
-        ...realEstateForm,
-        address: propertyAddress,
-        purchasePrice: Math.round(Math.random() * 400000) + 300000,
-        currentValue: Math.round(Math.random() * 500000) + 350000,
-        annualRent: Math.round(Math.random() * 30000) + 20000,
-        yearPurchased: new Date().getFullYear() - Math.floor(Math.random() * 10)
-      });
+      simulatePropertyDataForAddress(propertyAddress);
     } finally {
       setIsFetchingEstimate(false);
     }
+  };
+  
+  // Helper to simulate property data for a specific address
+  const simulatePropertyDataForAddress = (address) => {
+    const estimate = Math.round(Math.random() * 400000) + 300000;
+    
+    // Add a small delay to simulate API call
+    setTimeout(() => {
+      setRealEstateForm({
+        ...realEstateForm,
+        address: address,
+        purchasePrice: Math.round(estimate * 0.9),
+        currentValue: estimate,
+        annualRent: Math.round(Math.random() * 30000) + 20000,
+        yearPurchased: new Date().getFullYear() - Math.floor(Math.random() * 10)
+      });
+      
+      setPropertyDetails({
+        address: address,
+        robust_id: `sim_${Date.now()}`,
+        totalValue: estimate,
+        landValue: Math.floor(estimate * 0.3),
+        buildingValue: Math.floor(estimate * 0.7),
+        yearBuilt: Math.floor(Math.random() * 50) + 1970,
+        acreage: (Math.random() * 2 + 0.1).toFixed(2),
+        estimatedMonthlyRent: Math.floor(estimate * 0.005),
+        estimatedAnnualRent: Math.floor(estimate * 0.05),
+        summary: `${realEstateForm.type || 'Residential'} property with estimated value of $${estimate.toLocaleString()}.`,
+        simulated: true
+      });
+      
+      console.log(`Using simulated data for ${address}`);
+      
+      // Keep the loading state managed by the parent function
+    }, 800);
   };
 
   // Add real estate property
@@ -243,7 +555,10 @@ export default function RealEstateTab({
         acreage: propertyDetails.acreage,
         yearBuilt: propertyDetails.yearBuilt,
         landValue: propertyDetails.landValue,
-        buildingValue: propertyDetails.buildingValue
+        buildingValue: propertyDetails.buildingValue,
+        summary: propertyDetails.summary,
+        simulated: propertyDetails.simulated,
+        sources: propertyDetails.sources || []
       } : null
     };
 
@@ -281,8 +596,8 @@ export default function RealEstateTab({
           <CardHeader>
             <CardTitle className={`${darkMode ? 'text-slate-200' : 'text-slate-800'} text-lg font-semibold flex justify-between items-center`}>
               <span>Add Real Estate Property</span>
-              <span className="text-xs font-normal bg-blue-100 text-blue-700 px-2 py-0.5 rounded dark:bg-blue-900/30 dark:text-blue-300">
-                Using ReportAll API
+              <span className="text-xs font-normal bg-blue-100 text-blue-700 px-2 py-0.5 rounded dark:bg-blue-900/30 dark:text-blue-300 flex items-center gap-1">
+                <Globe className="h-3 w-3" /> Using Google Search
               </span>
             </CardTitle>
             {estimateError && <p className="text-xs text-rose-500 mt-2 flex items-center gap-1"><AlertCircle className="h-3 w-3" /> {estimateError}</p>}
@@ -417,6 +732,11 @@ export default function RealEstateTab({
                           <div className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                             {result.properties.addr_city}, {result.properties.state_abbr} {result.properties.addr_zip}
                           </div>
+                          {result.properties.summary && (
+                            <div className={`text-xs mt-1 ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+                              {result.properties.summary}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </button>
@@ -433,14 +753,30 @@ export default function RealEstateTab({
                 <div className="flex items-start gap-2 mb-2">
                   <Info className={`h-4 w-4 ${darkMode ? 'text-blue-400' : 'text-blue-600'} mt-0.5`} />
                   <span className="font-medium">Property Details</span>
-                  {propertyDetails.simulated && (
+                  {propertyDetails.simulated ? (
                     <span className={`text-xxs px-1 py-0.5 rounded ${
                       darkMode ? 'bg-amber-900/30 text-amber-400' : 'bg-amber-100 text-amber-800'
                     }`}>
                       Simulated
                     </span>
+                  ) : (
+                    <span className={`text-xxs px-1 py-0.5 rounded flex items-center gap-1 ${
+                      darkMode ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-100 text-emerald-800'
+                    }`}>
+                      <Globe className="h-2 w-2" /> Google Search
+                    </span>
                   )}
                 </div>
+
+                {/* Property Summary */}
+                {propertyDetails.summary && (
+                  <div className={`mb-3 py-1 px-2 rounded ${
+                    darkMode ? 'bg-slate-800/50' : 'bg-white/80'
+                  }`}>
+                    {propertyDetails.summary}
+                  </div>
+                )}
+                
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-2">
                   {propertyDetails.totalValue && (
                     <div className="flex justify-between">
@@ -467,6 +803,35 @@ export default function RealEstateTab({
                     </div>
                   )}
                 </div>
+                
+                {/* Sources Section */}
+                {propertyDetails.sources && propertyDetails.sources.length > 0 && !propertyDetails.simulated && (
+                  <div className={`mt-3 pt-2 border-t ${darkMode ? 'border-slate-600' : 'border-slate-200'}`}>
+                    <div className="flex items-center gap-2 mb-1">
+                      <Globe className={`h-3 w-3 ${darkMode ? 'text-blue-400' : 'text-blue-600'}`} />
+                      <span className={`text-xs ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                        Grounded Sources:
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {propertyDetails.sources.map((source, index) => (
+                        <a 
+                          key={index}
+                          href={source.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={`text-xxs px-1.5 py-0.5 rounded-full ${
+                            darkMode 
+                              ? 'bg-slate-800 text-blue-400 hover:bg-slate-700 border border-slate-700' 
+                              : 'bg-white text-blue-600 hover:bg-slate-100 border border-slate-200'
+                          }`}
+                        >
+                          {source.name}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
             
@@ -614,7 +979,16 @@ export default function RealEstateTab({
                           {p.type.charAt(0)}
                         </span>
                         <div>
-                          <p className={`font-medium ${darkMode ? 'text-slate-100' : 'text-slate-900'}`}>{p.address}</p>
+                          <div className="flex items-center gap-2">
+                            <p className={`font-medium ${darkMode ? 'text-slate-100' : 'text-slate-900'}`}>{p.address}</p>
+                            {p.propertyDetails && !p.propertyDetails.simulated && (
+                              <span className={`text-xxs px-1 py-0.5 rounded flex items-center gap-1 ${
+                                darkMode ? 'bg-emerald-900/30 text-emerald-400' : 'bg-emerald-100 text-emerald-800'
+                              }`}>
+                                <Globe className="h-2 w-2" /> Google Search
+                              </span>
+                            )}
+                          </div>
                           <div className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'} flex items-center gap-2`}>
                             <span>{p.type} (Purchased {p.yearPurchased})</span>
                             {p.propertyDetails && p.propertyDetails.yearBuilt && (
@@ -622,6 +996,11 @@ export default function RealEstateTab({
                                 <span>•</span>
                                 <span>Built {p.propertyDetails.yearBuilt}</span>
                               </span>
+                            )}
+                            {p.propertyDetails && p.propertyDetails.summary && (
+                              <p className={`text-xs mt-1 ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+                                {p.propertyDetails.summary}
+                              </p>
                             )}
                           </div>
                         </div>
@@ -678,6 +1057,8 @@ export default function RealEstateTab({
                           {p.roi.toFixed(1)}%
                         </span>
                       </div>
+                      
+                      {/* Property ID */}
                       {p.propertyDetails && p.propertyDetails.robust_id && (
                         <div className={`mt-2 pt-2 border-t border-dashed flex items-center justify-between text-xs
                           ${darkMode ? 'border-slate-600' : 'border-slate-200'}`}
@@ -686,6 +1067,35 @@ export default function RealEstateTab({
                           <span className={`font-mono ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                             {p.propertyDetails.robust_id}
                           </span>
+                        </div>
+                      )}
+                      
+                      {/* Sources Section */}
+                      {p.propertyDetails && p.propertyDetails.sources && p.propertyDetails.sources.length > 0 && !p.propertyDetails.simulated && (
+                        <div className={`mt-2 pt-2 border-t border-dashed ${darkMode ? 'border-slate-600' : 'border-slate-200'}`}>
+                          <div className="flex items-center gap-1">
+                            <Globe className={`h-3 w-3 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`} />
+                            <span className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                              Grounded Sources:
+                            </span>
+                            <div className="flex flex-wrap gap-1 ml-1">
+                              {p.propertyDetails.sources.map((source, index) => (
+                                <a 
+                                  key={index}
+                                  href={source.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className={`text-xxs px-1 py-0.5 rounded ${
+                                    darkMode 
+                                      ? 'bg-slate-700 text-blue-400 hover:bg-slate-600' 
+                                      : 'bg-slate-100 text-blue-600 hover:bg-slate-200'
+                                  }`}
+                                >
+                                  {source.name}
+                                </a>
+                              ))}
+                            </div>
+                          </div>
                         </div>
                       )}
                     </div>
