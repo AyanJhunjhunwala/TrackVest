@@ -20,11 +20,6 @@ export default function SettingsModal({ isOpen, onClose, darkMode }) {
   const [polygonApiKey, setPolygonApiKey] = useState(localStorage.getItem('polygonApiKey') || "9h2tWR97GWuVzS5a27bqgC4JjhC3H1uv");
   const [isPolygonKeyVisible, setIsPolygonKeyVisible] = useState(false);
   const [isPolygonKeySaved, setIsPolygonKeySaved] = useState(false);
-  
-  // Alpha Vantage API Key state (third API)
-  const [alphaVantageApiKey, setAlphaVantageApiKey] = useState(localStorage.getItem('alphaVantageApiKey') || "");
-  const [isAlphaVantageKeyVisible, setIsAlphaVantageKeyVisible] = useState(false);
-  const [isAlphaVantageKeySaved, setIsAlphaVantageKeySaved] = useState(false);
 
   // Save Gemini API key to localStorage
   const saveGeminiApiKey = () => {
@@ -48,17 +43,6 @@ export default function SettingsModal({ isOpen, onClose, darkMode }) {
     }, 3000);
   };
 
-  // Save Alpha Vantage API key to localStorage
-  const saveAlphaVantageApiKey = () => {
-    localStorage.setItem('alphaVantageApiKey', alphaVantageApiKey);
-    setIsAlphaVantageKeySaved(true);
-    
-    // Show success message briefly
-    setTimeout(() => {
-      setIsAlphaVantageKeySaved(false);
-    }, 3000);
-  };
-
   if (!isOpen) return null;
 
   return (
@@ -79,10 +63,9 @@ export default function SettingsModal({ isOpen, onClose, darkMode }) {
 
         <div className="p-5">
           <Tabs defaultValue="gemini" className="w-full">
-            <TabsList className={`grid w-full grid-cols-3 mb-6 ${darkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
+            <TabsList className={`grid w-full grid-cols-2 mb-6 ${darkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
               <TabsTrigger value="gemini">Gemini API</TabsTrigger>
               <TabsTrigger value="polygon">Polygon.io API</TabsTrigger>
-              <TabsTrigger value="alphavantage">AlphaVantage API</TabsTrigger>
             </TabsList>
             
             <TabsContent value="gemini">
@@ -204,69 +187,6 @@ export default function SettingsModal({ isOpen, onClose, darkMode }) {
                       <div className={`h-2 w-2 rounded-full ${polygonApiKey ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
                       <p className={`text-sm ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>
                         {polygonApiKey ? 'Connected' : 'Not configured'}
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-            
-            <TabsContent value="alphavantage">
-              <Card className={`${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md`}>
-                <CardHeader>
-                  <h3 className={`text-lg font-semibold ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>Alpha Vantage API</h3>
-                  <p className={`text-sm ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                    Configure your Alpha Vantage API key for additional financial data
-                  </p>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <Label htmlFor="alphaVantageApiKey" className="text-sm font-medium mb-1 block">Alpha Vantage API Key</Label>
-                    <div className="flex gap-2">
-                      <div className="relative flex-grow">
-                        <Input 
-                          id="alphaVantageApiKey" 
-                          name="alphaVantageApiKey" 
-                          type={isAlphaVantageKeyVisible ? "text" : "password"}
-                          placeholder="Enter your Alpha Vantage API key" 
-                          value={alphaVantageApiKey} 
-                          onChange={(e) => setAlphaVantageApiKey(e.target.value)} 
-                          className={`${darkMode ? 'bg-slate-700 border-slate-600' : 'bg-white'} pr-9`} 
-                        />
-                        <button 
-                          type="button"
-                          className={`absolute right-2 top-1/2 transform -translate-y-1/2 ${darkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-400 hover:text-slate-600'}`}
-                          onClick={() => setIsAlphaVantageKeyVisible(!isAlphaVantageKeyVisible)}
-                        >
-                          {isAlphaVantageKeyVisible ? 
-                            <EyeClosedIcon className="h-4 w-4" /> : 
-                            <EyeOpenIcon className="h-4 w-4" />
-                          }
-                        </button>
-                      </div>
-                      <Button 
-                        onClick={saveAlphaVantageApiKey} 
-                        className={`flex-shrink-0 gap-1 ${isAlphaVantageKeySaved ? 'bg-emerald-600 hover:bg-emerald-700' : ''}`}
-                      >
-                        {isAlphaVantageKeySaved ? (
-                          <>
-                            <CheckCircledIcon className="h-4 w-4" /> Saved
-                          </>
-                        ) : (
-                          "Save"
-                        )}
-                      </Button>
-                    </div>
-                    <p className={`mt-2 text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                      Alpha Vantage provides enterprise-grade financial market data. Get your API key at <a href="https://www.alphavantage.co/support/#api-key" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">alphavantage.co</a>.
-                    </p>
-                  </div>
-                  <div className={`rounded-md p-3 ${darkMode ? 'bg-slate-700/50' : 'bg-slate-100'}`}>
-                    <h4 className={`text-sm font-medium mb-1 ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>Status</h4>
-                    <div className="flex items-center gap-2">
-                      <div className={`h-2 w-2 rounded-full ${alphaVantageApiKey ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
-                      <p className={`text-sm ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>
-                        {alphaVantageApiKey ? 'Connected' : 'Not configured'}
                       </p>
                     </div>
                   </div>

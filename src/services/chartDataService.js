@@ -871,4 +871,162 @@ const generateSampleComparisonData = (symbols, periods) => {
 const pseudoRandom = (seed) => {
   const x = Math.sin(seed) * 10000;
   return x - Math.floor(x);
+};
+
+/**
+ * Fetch historical price data for a stock
+ * @param {string} symbol - Stock symbol
+ * @param {string} timeframe - Time frame (1d, 1w, 1m, 3m, 1y)
+ * @return {Promise<Array>} - Array of price data objects with date and price
+ */
+export const fetchStockPriceHistory = async (symbol, timeframe = '1m') => {
+  try {
+    console.log(`Fetching price history for ${symbol} with timeframe ${timeframe}`);
+    
+    // Map timeframe to number of data points needed and API parameter
+    const timeframeMap = {
+      '1d': { days: 1, multiplier: 5, timespan: 'minute' }, // 1 day: 5-minute intervals (78 points)
+      '1w': { days: 7, multiplier: 1, timespan: 'hour' },   // 1 week: hourly (168 points)
+      '1m': { days: 30, multiplier: 1, timespan: 'day' },   // 1 month: daily (30 points)
+      '3m': { days: 90, multiplier: 1, timespan: 'day' },   // 3 months: daily (90 points)
+      '1y': { days: 365, multiplier: 1, timespan: 'day' }   // 1 year: daily (252 points)
+    };
+    
+    const timeSettings = timeframeMap[timeframe] || timeframeMap['1m'];
+    
+    // Calculate date range
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - timeSettings.days);
+    
+    // Format dates for API
+    const formatDate = (date) => {
+      return date.toISOString().split('T')[0];
+    };
+    
+    const startDateStr = formatDate(startDate);
+    const endDateStr = formatDate(endDate);
+    
+    // Check if we have cached data
+    const cacheKey = `${symbol}_${timeframe}_${startDateStr}_${endDateStr}`;
+    const cachedData = sessionStorage.getItem(cacheKey);
+    
+    if (cachedData) {
+      return JSON.parse(cachedData);
+    }
+    
+    // Fetch from Polygon API
+    const POLYGON_API_KEY = localStorage.getItem('polygonApiKey') || "9h2tWR97GWuVzS5a27bqgC4JjhC3H1uv";
+    const apiUrl = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/${timeSettings.multiplier}/${timeSettings.timespan}/${startDateStr}/${endDateStr}?apiKey=${POLYGON_API_KEY}`;
+    
+    const response = await fetch(apiUrl);
+    
+    if (!response.ok) {
+      throw new Error(`Polygon API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    if (!data.results || data.results.length === 0) {
+      throw new Error('No data returned from API');
+    }
+    
+    // Format data for chart
+    const priceData = data.results.map(item => ({
+      date: new Date(item.t).toISOString().split('T')[0],  // Convert timestamp to YYYY-MM-DD
+      open: item.o,
+      high: item.h,
+      low: item.l,
+      close: item.c,
+      volume: item.v,
+      price: item.c  // Use closing price
+    }));
+    
+    // Cache the results
+    sessionStorage.setItem(cacheKey, JSON.stringify(priceData));
+    
+    return priceData;
+  } catch (error) {
+    console.error(`Error fetching price history for ${symbol}:`, error);
+    
+    // Generate fallback data if API fails
+    return generateFallbackPriceData(symbol, timeframe);
+  }
+};
+
+/**
+ * Generate fallback price data when API fails
+ * @param {string} symbol - Stock symbol
+ * @param {string} timeframe - Time frame
+ * @return {Array} - Fake price data
+ */
+const generateFallbackPriceData = (symbol, timeframe) => {
+  console.log(`Generating fallback price data for ${symbol}`);
+  
+  // Map timeframe to number of data points
+  const pointsMap = {
+    '1d': 78,   // 5-minute intervals for 1 day (market hours only)
+    '1w': 7,    // Daily for 1 week
+    '1m': 30,   // Daily for 1 month
+    '3m': 90,   // Daily for 3 months
+    '1y': 252   // Daily for 1 year (trading days)
+  };
+  
+  const numPoints = pointsMap[timeframe] || 30;
+  
+  // Generate random starting price based on symbol's first character
+  const basePrice = (symbol.charCodeAt(0) % 10) * 10 + 50; // 50-150 range
+  
+  // Generate dates
+  const endDate = new Date();
+  const dates = [];
+  
+  for (let i = numPoints - 1; i >= 0; i--) {
+    const date = new Date();
+    
+    if (timeframe === '1d') {
+      // For 1d, generate 5-minute intervals
+      date.setMinutes(date.getMinutes() - (i * 5));
+    } else {
+      // For other timeframes, generate daily data
+      date.setDate(date.getDate() - i);
+    }
+    
+    dates.push(date.toISOString().split('T')[0]);
+  }
+  
+  // Generate price data with a slight upward trend and occasional volatility
+  const priceData = [];
+  let price = basePrice;
+  
+  for (let i = 0; i < numPoints; i++) {
+    // Add some random movement (normal market noise)
+    const change = (Math.random() - 0.45) * (price * 0.02); // -0.5% to +1.5% change
+    price += change;
+    
+    // Add occasional volatility spikes
+    if (Math.random() < 0.1) { // 10% chance of a volatility spike
+      const spike = (Math.random() - 0.5) * (price * 0.05); // -2.5% to +2.5% spike
+      price += spike;
+    }
+    
+    // Ensure price doesn't go negative
+    price = Math.max(price, 1);
+    
+    // Create a realistic price point with OHLCV data
+    const dayHigh = price * (1 + Math.random() * 0.015); // Up to 1.5% higher
+    const dayLow = price * (1 - Math.random() * 0.015);  // Up to 1.5% lower
+    
+    priceData.push({
+      date: dates[i],
+      open: price * (1 + (Math.random() - 0.5) * 0.01), // Slightly different from close
+      high: dayHigh,
+      low: dayLow,
+      close: price,
+      price: price,
+      volume: Math.floor(Math.random() * 1000000) + 500000 // Random volume between 500K and 1.5M
+    });
+  }
+  
+  return priceData;
 }; 

@@ -1,4 +1,11 @@
 import { useEffect, useState } from 'react';
+import { 
+  saveChartToCache, 
+  loadChartFromCache, 
+  loadAllCachedCharts, 
+  removeChartFromCache,
+  hasChartInCache
+} from '../utils/localChartCache';
 
 // Define an event emitter for chart subscriptions
 class ChartEventEmitter {
@@ -6,6 +13,30 @@ class ChartEventEmitter {
     this.subscribers = new Map();
     this.chartData = new Map();
     this.lastUpdated = new Map();
+    
+    // Load cached charts on initialization
+    this.loadFromCache();
+  }
+  
+  // Load all cached charts from localStorage
+  loadFromCache() {
+    try {
+      // Check if we're in a browser environment
+      if (typeof window !== 'undefined' && window.localStorage) {
+        console.log('Loading cached charts...');
+        const cachedCharts = loadAllCachedCharts();
+        
+        if (cachedCharts.length > 0) {
+          cachedCharts.forEach(chart => {
+            this.chartData.set(chart.id, chart.data);
+            this.lastUpdated.set(chart.id, chart.timestamp);
+          });
+          console.log(`Loaded ${cachedCharts.length} charts from cache`);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load charts from cache:', error);
+    }
   }
 
   // Subscribe to chart updates
@@ -19,9 +50,22 @@ class ChartEventEmitter {
     // Immediately send current data if available
     if (this.chartData.has(chartId)) {
       callback({
+        id: chartId,
         result: this.chartData.get(chartId),
         timestamp: this.lastUpdated.get(chartId)
       });
+    } else if (hasChartInCache(chartId)) {
+      // Try to load from cache if not in memory
+      const cachedChart = loadChartFromCache(chartId);
+      if (cachedChart) {
+        this.chartData.set(chartId, cachedChart.chartData);
+        this.lastUpdated.set(chartId, cachedChart.timestamp);
+        callback({
+          id: chartId,
+          result: cachedChart.chartData,
+          timestamp: cachedChart.timestamp
+        });
+      }
     }
     
     // Return unsubscribe function
@@ -42,9 +86,13 @@ class ChartEventEmitter {
     this.chartData.set(chartId, chartData);
     this.lastUpdated.set(chartId, timestamp);
     
+    // Save to cache
+    saveChartToCache(chartId, chartData, timestamp);
+    
     if (this.subscribers.has(chartId)) {
       this.subscribers.get(chartId).forEach(callback => {
         callback({
+          id: chartId,
           result: chartData,
           timestamp
         });
@@ -69,6 +117,9 @@ class ChartEventEmitter {
     this.chartData.delete(chartId);
     this.lastUpdated.delete(chartId);
     
+    // Remove from cache
+    removeChartFromCache(chartId);
+    
     // Notify subscribers about the removal
     if (this.subscribers.has('*')) {
       this.subscribers.get('*').forEach(callback => {
@@ -91,11 +142,24 @@ class ChartEventEmitter {
     this.chartData.forEach((data, id) => {
       charts.push({
         id,
-        chartData: data,
+        data,
         timestamp: this.lastUpdated.get(id)
       });
     });
     return charts;
+  }
+  
+  // Check if a chart is a Plotly chart
+  isPlotlyChart(chartData) {
+    return chartData && chartData.plotlyConfig;
+  }
+  
+  // Get Plotly chart data in the right format
+  getPlotlyData(chartData) {
+    if (this.isPlotlyChart(chartData)) {
+      return chartData.plotlyConfig;
+    }
+    return null;
   }
 }
 
@@ -111,14 +175,18 @@ export const useChartSubscription = (chartId) => {
     chartEmitter.lastUpdated.get(chartId) || null
   );
   const [isLoading, setIsLoading] = useState(!chartData);
+  const [isPlotlyChart, setIsPlotlyChart] = useState(
+    chartEmitter.isPlotlyChart(chartEmitter.chartData.get(chartId))
+  );
 
   useEffect(() => {
     setIsLoading(!chartData);
     
     // Subscribe to updates for this chart
-    const unsubscribe = chartEmitter.subscribe(chartId, ({ result, timestamp }) => {
+    const unsubscribe = chartEmitter.subscribe(chartId, ({ id, result, timestamp }) => {
       setChartData(result);
       setLastUpdated(timestamp);
+      setIsPlotlyChart(chartEmitter.isPlotlyChart(result));
       setIsLoading(false);
     });
     
@@ -128,7 +196,9 @@ export const useChartSubscription = (chartId) => {
   return {
     chartData,
     lastUpdated,
-    isLoading
+    isLoading,
+    isPlotlyChart,
+    plotlyData: isPlotlyChart ? chartEmitter.getPlotlyData(chartData) : null
   };
 };
 
@@ -152,13 +222,13 @@ export const useAllChartsSubscription = () => {
             const updated = [...prev];
             updated[existingIndex] = {
               ...updated[existingIndex],
-              chartData: result,
+              data: result,
               timestamp
             };
             return updated;
           } else {
             // Add new chart
-            return [...prev, { id, chartData: result, timestamp }];
+            return [...prev, { id, data: result, timestamp }];
           }
         });
       }

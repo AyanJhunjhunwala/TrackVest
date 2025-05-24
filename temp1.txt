@@ -5,8 +5,6 @@ import { MessageSquare, X, Send, Search, ChevronRight, BarChart4, LineChart, Zap
 import { motion, AnimatePresence } from 'framer-motion';
 import Chart from "./components/ui/Chart";
 import ComparisonChart from "./components/ui/ComparisonChart";
-import PlotlyChart from "./components/ui/PlotlyChart"; // Add this import
-import DynamicPlotlyChart from "./components/ui/DynamicPlotlyChart"; // Add this import
 import { 
   formatPortfolioData, 
   createPortfolioSummaryText
@@ -25,7 +23,6 @@ import {
 import { chartEmitter } from './hooks/useChartSubscription';
 import { subscribeToStockUpdates, subscribeToComparisonUpdates } from './services/chartDataService';
 import { createTestStockChart, createTestComparisonChart, createIntelligentChart } from './utils/directChartGenerator';
-import { analyzeChartIntent, createStockPriceChart, createComparisonChart } from './utils/plotlyChartGenerator'; // Add this import
 
 // Initialize Google Generative AI with API key (revert to original class)
 const genAI = new GoogleGenerativeAI(localStorage.getItem('geminiApiKey') || "AIzaSyDJ7tT1DyZ4FnSWIc4UazjYL4gGCo6vN0Y");
@@ -432,92 +429,10 @@ const formatMessageContent = (content) => {
   return `<p class="mb-2">${formattedContent}</p>`;
 };
 
-/**
- * Extract ticker symbols from user query using Gemini API
- * @param {string} query - User's query text
- * @return {Promise<string[]>} - Array of extracted ticker symbols
- */
-const extractTickerSymbols = async (query) => {
-  try {
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-    
-    const prompt = `Extract all stock ticker symbols from this text: "${query}"
-    
-    Rules:
-    1. Return ONLY valid stock tickers (e.g., AAPL, MSFT, GOOGL, IONQ)
-    2. Return as a JSON array like ["AAPL", "MSFT"] with NO explanations
-    3. Do not include company names, only their ticker symbols
-    4. If no valid tickers are found, return empty array []
-    5. For ticker symbols with dollar signs ($AAPL), remove the dollar sign
-    
-    Output format: ["TICKER1", "TICKER2", ...]
-    `;
-    
-    const result = await model.generateContent({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: {
-        temperature: 0,
-        maxOutputTokens: 256
-      }
-    });
-    
-    const responseText = result.response.text().trim();
-    console.log("Gemini ticker extraction response:", responseText);
-    
-    // Try to parse JSON array from response
-    try {
-      // Clean response of any markdown or extra text
-      const cleanedResponse = responseText
-        .replace(/```json/g, '')
-        .replace(/```/g, '')
-        .trim();
-      
-      // If response looks like a JSON array, parse it
-      if (cleanedResponse.startsWith('[') && cleanedResponse.endsWith(']')) {
-        const tickers = JSON.parse(cleanedResponse);
-        // Make sure we have an array of strings
-        return Array.isArray(tickers) ? tickers.filter(t => typeof t === 'string' && t.length > 0) : [];
-      }
-      
-      // Try to extract array using regex as fallback
-      const arrayMatch = responseText.match(/\[.*\]/);
-      if (arrayMatch) {
-        const tickers = JSON.parse(arrayMatch[0]);
-        return Array.isArray(tickers) ? tickers.filter(t => typeof t === 'string' && t.length > 0) : [];
-      }
-    } catch (error) {
-      console.error("Failed to parse ticker symbols from response:", error);
-    }
-    
-    // If all parsing attempts fail, fall back to regex extraction
-    return extractTickerSymbolsRegex(query);
-  } catch (error) {
-    console.error("Error extracting ticker symbols with Gemini:", error);
-    return extractTickerSymbolsRegex(query);
-  }
-};
-
-/**
- * Extract ticker symbols using regex as fallback
- * @param {string} query - User's query
- * @return {string[]} - Array of extracted ticker symbols
- */
-const extractTickerSymbolsRegex = (query) => {
-  // Look for uppercase words with 1-5 letters or words with $ followed by 1-5 uppercase letters
-  const symbolRegex = /\b[A-Z]{1,5}\b|\$[A-Z]{1,5}/g;
-  const matches = query.match(symbolRegex) || [];
-  
-  // Filter out common words that might be picked up
-  const commonWords = ['I', 'A', 'THE', 'FOR', 'AND', 'OR', 'TO', 'IN', 'ON', 'BY', 'AT', 'IS', 'IT', 'BE', 'SO'];
-  return matches
-    .map(m => m.replace('$', ''))
-    .filter(m => !commonWords.includes(m));
-};
-
 export default function GeminiChat({ darkMode, positions = [], realEstateHoldings = [], onAddInsight }) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
-    { role: 'system', content: 'You are a helpful financial assistant. You can provide information and insights about stocks, cryptocurrencies, and real estate investments.' },
+    { role: 'system', content: 'You are a helpful financial assistant powered by Gemini. You can provide information and insights about stocks, cryptocurrencies, and real estate investments.' },
     { role: 'assistant', content: 'Hello! I\'m your TrackVest assistant. Ask me about your portfolio, market data, or financial insights. I can also create charts that will appear in your Insights tab' }
   ]);
   const [input, setInput] = useState('');
@@ -786,20 +701,26 @@ If users ask about importing or feeding in more data, remind them they can use t
         - Do not refer users to external websites for basic stock information or metrics.
         ${webSearchEnabled ? '- When you use search results, properly attribute the information with sources.' : ''}
         
-        Format ticker symbols exactly like this at the end of your response:
+        In your response, list ONLY stock ticker symbols that are explicitly mentioned in the query. Do not add any tickers that were not mentioned by the user.
+        
+        Format them exactly like this at the end of your response:
         TICKER_SYMBOLS: AAPL, MSFT, GOOGL
         
-        Use a comma-separated list, not square brackets.
+        Do NOT include square brackets, just use a comma-separated list.
         If no ticker symbols are mentioned, include "TICKER_SYMBOLS: NONE"
         Only include actual ticker symbols, not company names or other words.
         
+        WHEN DISCUSSING THE USER'S PORTFOLIO:
+        - If asked about specific stocks, check the portfolio data above and provide precise information including shares, value, etc.
+        - If asked about specific cryptocurrencies, check the portfolio data above and provide precise information
+        - If asked about real estate holdings, provide all relevant details like value, equity, mortgage, etc.
+        - For any holdings NOT in the user's portfolio, clearly indicate this
+        
         CHART CREATION RULES:
-        - When the user asks for a chart or graph, CREATE INTERACTIVE PLOTLY CHARTS using the plotlyChartGenerator
-        - Use Plotly.js for all charts - it offers better interactivity and features compared to Recharts
-        - Ensure all charts have range sliders, zoom capabilities, and appropriate tooltips
-        - For stock charts, automatically include technical indicators like SMA when appropriate
-        - For any chart request, extract the stock symbols and time period to fetch the appropriate data
-        - Tell the user that you've added the chart to their Insights tab
+        - ONLY create charts when the user explicitly asks for a chart or graph
+        - Do NOT extract ticker symbols for charts unless the user clearly wants a visualization
+        - Example chart requests: "show me a chart for AAPL", "create a graph of my stocks", "visualize MSFT performance"
+        - For general questions about holdings, just provide the text information, not charts
         
         If the user asks about importing or feeding in more data, explain they can use the "Import Portfolio" button in the header.
         
@@ -846,20 +767,13 @@ If users ask about importing or feeding in more data, remind them they can use t
       
       // Extract ticker symbols from response
       const tickerMatch = responseText.match(/TICKER_SYMBOLS:\s*(.*?)(?:\n|$)/);
-      const extractedTickers = tickerMatch ? 
+      const tickerSymbols = tickerMatch ? 
         tickerMatch[1]
           .replace(/[\[\]]/g, '') // Remove any square brackets if present
           .split(',')
           .map(t => t.trim())
           .filter(t => t !== 'NONE' && t.length > 0)
         : [];
-      
-      console.log("Extracted tickers:", extractedTickers);
-      
-      // Only use Gemini for extraction if no tickers were found in the TICKER_SYMBOLS line
-      const tickerSymbols = extractedTickers.length > 0 ? 
-        extractedTickers : 
-        await extractTickerSymbols(input);
       
       console.log("Extracted tickers:", tickerSymbols);
       
@@ -882,105 +796,45 @@ If users ask about importing or feeding in more data, remind them they can use t
       
       // Only create charts if explicitly requested and we have ticker symbols
       if (containsChartRequest && tickerSymbols.length > 0) {
+        // Check for comparison intent by looking for comparison words
+        const isComparison = input.toLowerCase().includes('compar') || 
+                            input.toLowerCase().includes('versus') || 
+                            input.toLowerCase().includes(' vs ') ||
+                            input.toLowerCase().includes(' vs. ');
+        
+        const timeframeMatch = input.match(/\b(\d+[dwmy])\b/i);
+        const timeframe = timeframeMatch ? timeframeMatch[1].toLowerCase() : '1m';
+        
         try {
-          // Analyze the query to determine chart intent
-          const intent = await analyzeChartIntent(input);
-          console.log("Chart intent analysis:", intent);
+          // Use the unified intelligent chart function that handles both single and comparison charts
+          // and automatically detects indicators from the user query
+          console.log(`Creating intelligent chart for ${tickerSymbols.length} symbols using original query`);
           
-          // Generate unique chart ID
-          const chartId = intent.isComparison ? 
+          // Generate chart ID
+          const chartId = isComparison ? 
             `comparison_${Date.now()}` : 
             `stock_${tickerSymbols[0]}_${Date.now()}`;
           
-          if (intent.isComparison) {
-            // Fetch data for all symbols
-            const comparisonData = {};
-            const symbols = tickerSymbols.length > 1 ? tickerSymbols : [tickerSymbols[0], 'SPY']; // Default to SPY comparison
-            
-            for (const symbol of symbols) {
-              try {
-                // This would be replaced with your actual data fetching code
-                const { fetchStockPriceHistory } = await import('./services/chartDataService');
-                const priceData = await fetchStockPriceHistory(symbol, intent.timePeriod || '1m');
-                
-                if (priceData && priceData.length > 0) {
-                  // Extract dates only from the first symbol's data
-                  if (!comparisonData.dates) {
-                    comparisonData.dates = priceData.map(d => d.date);
-                  }
-                  
-                  // Add prices for this symbol
-                  comparisonData[symbol] = priceData.map(d => d.close || d.price || d.value);
-                }
-              } catch (error) {
-                console.error(`Error fetching data for ${symbol}:`, error);
-              }
-            }
-            
-            // Create comparison chart with Plotly
-            if (comparisonData.dates && Object.keys(comparisonData).length > 1) {
-              // Use the createComparisonChart function which already uses Plotly
-              await createComparisonChart(symbols, comparisonData);
-              
-              // Add chart message
-              const chartMessage = { 
-                role: 'assistant', 
-                content: `I've created an interactive Plotly chart comparing ${symbols.join(', ')} in your Insights tab.`
-              };
-              setMessages(prev => [...prev, chartMessage]);
-            }
-          } else {
-            // Single stock chart
-            const symbol = tickerSymbols[0];
-            
-            try {
-              // This would be replaced with your actual data fetching code
-              const { fetchStockPriceHistory } = await import('./services/chartDataService');
-              const priceData = await fetchStockPriceHistory(symbol, intent.timePeriod || '1m');
-              
-              if (priceData && priceData.length > 0) {
-                // Check if this is a technical indicator request (MACD, RSI, etc.)
-                const isTechnicalRequest = (intent.indicators || []).some(indicator => 
-                  ['macd', 'rsi', 'bollinger'].includes(indicator.toLowerCase())
-                );
-                
-                if (isTechnicalRequest) {
-                  // Use the specialized technical indicator chart
-                  const { createTechnicalIndicatorChart } = await import('./utils/plotlyChartGenerator');
-                  await createTechnicalIndicatorChart(symbol, priceData, intent.indicators || ['macd']);
-                  
-                  // Add chart message
-                  const chartMessage = { 
-                    role: 'assistant', 
-                    content: `I've created an interactive technical analysis chart for ${symbol} with ${intent.indicators?.join(', ')} in your Insights tab.`
-                  };
-                  setMessages(prev => [...prev, chartMessage]);
-                } else {
-                  // Create regular stock chart with Plotly
-                  await createStockPriceChart(symbol, priceData, intent.indicators || ['sma']);
-                  
-                  // Add chart message
-                  const chartMessage = { 
-                    role: 'assistant', 
-                    content: `I've created an interactive Plotly chart for ${symbol} in your Insights tab with ${intent.indicators?.join(', ') || 'SMA'} indicators.`
-                  };
-                  setMessages(prev => [...prev, chartMessage]);
-                }
-              }
-            } catch (error) {
-              console.error(`Error creating chart for ${symbol}:`, error);
-              const chartErrorMessage = { 
-                role: 'assistant', 
-                content: `I tried to create a chart for ${symbol}, but encountered an error. Please try again with a different timeframe or indicator.`
-              };
-              setMessages(prev => [...prev, chartErrorMessage]);
-            }
-          }
+          // Create chart using the intelligent function
+          const chartData = await createIntelligentChart(
+            isComparison ? tickerSymbols : tickerSymbols[0], 
+            input, // Pass original user query for intent analysis
+            timeframe
+          );
+          
+          // Add to chart system via emitter
+          chartEmitter.updateChart(chartId, chartData);
+          
+          const chartMessage = { 
+            role: 'assistant', 
+            content: `I've added ${isComparison ? 'a comparison chart' : 'charts'} for ${tickerSymbols.join(', ')} to your Insights tab.`
+          };
+          setMessages(prev => [...prev, chartMessage]);
         } catch (chartError) {
           console.error("Error creating chart:", chartError);
           const chartErrorMessage = { 
             role: 'assistant', 
-            content: `I tried to create a chart, but encountered an error. Let me know if you'd like me to try with different parameters.`
+            content: `I tried to create a chart, but encountered an error. This might be due to API limitations.`
           };
           setMessages(prev => [...prev, chartErrorMessage]);
         }
@@ -1274,9 +1128,6 @@ If users ask about importing or feeding in more data, remind them they can use t
     const showIndicatorsForThisChart = showIndicators[id] || false;
     const indicatorsForThisChart = selectedIndicators[id] || ['sma'];
     
-    // Check if this is a Plotly chart
-    const isPlotlyChart = data && data.plotlyConfig;
-    
     // Toggle indicators for a stock chart
     const toggleIndicator = (indicator) => {
       if (indicatorsForThisChart.includes(indicator)) {
@@ -1293,41 +1144,29 @@ If users ask about importing or feeding in more data, remind them they can use t
     };
     
     // Regenerate chart with selected indicators
-    const regenerateChartWithIndicators = async () => {
-      if (isPlotlyChart) {
-        try {
-          // Extract symbol from chart ID
-          const idParts = id.split('_');
-          const symbol = idParts[1];
-          const { fetchStockPriceHistory } = await import('./services/chartDataService');
-          
-          // Fetch data
-          const priceData = await fetchStockPriceHistory(symbol, '1m');
-          
-          if (priceData && priceData.length > 0) {
-            // Create new chart with updated indicators
-            await createStockPriceChart(symbol, priceData, indicatorsForThisChart);
-          }
-        } catch (error) {
-          console.error("Error regenerating chart:", error);
-        }
-      } else if (!data || !data.chartConfig) {
-        return;
-      } else if (isComparisonChart) {
+    const regenerateChartWithIndicators = () => {
+      if (!data || !data.chartConfig) return;
+      
+      let updatedChartData;
+      
+      if (isComparisonChart) {
         // Extract symbols from comparison chart
         const symbols = data.series.filter(s => !s.dataKey.includes('_')).map(s => s.name);
         
         // Create custom query for intelligent chart creation
         const customQuery = `Compare ${symbols.join(' vs ')} with ${indicatorsForThisChart.join(', ')}`;
-        createIntelligentChart(symbols, customQuery, '1m');
+        updatedChartData = createIntelligentChart(symbols, customQuery, '1m');
       } else {
         // Extract symbol from chart title
         const symbol = data.chartConfig.title.split(' ')[0];
         
         // Create custom query for intelligent chart creation
         const customQuery = `Show ${symbol} chart with ${indicatorsForThisChart.join(', ')}`;
-        createIntelligentChart(symbol, customQuery, '1m');
+        updatedChartData = createIntelligentChart(symbol, customQuery, '1m');
       }
+      
+      // Update the chart using the chart emitter
+      chartEmitter.updateChart(id, updatedChartData);
     };
     
     return (
@@ -1345,12 +1184,9 @@ If users ask about importing or feeding in more data, remind them they can use t
         <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
           <div>
             <h3 className={`font-medium ${darkMode ? 'text-white' : 'text-slate-800'}`}>
-              {isPlotlyChart 
-                ? (data.plotlyConfig.layout?.title || 'Financial Chart')
-                : (isComparisonChart 
-                  ? `Comparison: ${data.series?.filter(s => !s.dataKey.includes('_')).map(s => s.name).join(' vs ')}`
-                  : `${data.chartConfig?.title || 'Stock Chart'}`
-                )
+              {isComparisonChart 
+                ? `Comparison: ${data.series?.filter(s => !s.dataKey.includes('_')).map(s => s.name).join(' vs ')}`
+                : `${data.chartConfig?.title || 'Stock Chart'}`
               }
             </h3>
             <div className={`text-xs mt-1 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
@@ -1417,12 +1253,7 @@ If users ask about importing or feeding in more data, remind them they can use t
         )}
         
         <div className="p-4 h-64">
-          {isPlotlyChart ? (
-            <DynamicPlotlyChart
-              chartId={id}
-              darkMode={darkMode}
-            />
-          ) : isComparisonChart ? (
+          {isComparisonChart ? (
             <ComparisonChart 
               data={data.chartConfig?.data} 
               series={data.series}
@@ -1592,376 +1423,3 @@ If users ask about importing or feeding in more data, remind them they can use t
                   >
                     <Search className="h-4 w-4" />
                   </Button>
-                </div>
-              </motion.div>
-              
-              {/* Tab Navigation with Animated Slider */}
-              <motion.div 
-                className={`px-2 py-2 border-b`}
-                animate={{
-                  backgroundColor: darkMode ? 'rgb(30, 41, 59)' : 'rgb(241, 245, 249)',
-                  borderColor: darkMode ? 'rgb(51, 65, 85)' : 'rgb(226, 232, 240)'
-                }}
-              >
-                <div className="flex space-x-1 relative">
-                  {/* Animated Slider Background */}
-                  <motion.div 
-                    className="absolute h-full rounded-lg transition-colors duration-300"
-                    animate={{
-                      left: `${tabs.findIndex(t => t.id === activeTab) * 25}%`,
-                      backgroundColor: darkMode ? 'rgb(51, 65, 85)' : 'rgb(255, 255, 255)',
-                      boxShadow: darkMode ? '0 1px 3px rgba(0,0,0,0.3)' : '0 1px 3px rgba(0,0,0,0.1)'
-                    }}
-                    transition={{
-                      type: "spring",
-                      stiffness: 300,
-                      damping: 30
-                    }}
-                    style={{ width: '25%' }}
-                  />
-
-                  {/* Tab Buttons */}
-                  {tabs.map(tab => (
-                    <motion.button
-                      key={tab.id}
-                      onClick={() => setActiveTab(tab.id)}
-                      className={`
-                        flex items-center space-x-1 px-3 py-2 rounded-lg text-sm font-medium
-                        w-1/4 justify-center z-10 transition-colors duration-300
-                        ${activeTab === tab.id
-                          ? darkMode
-                            ? 'text-white'
-                            : 'text-slate-800'
-                          : darkMode
-                            ? 'text-slate-400 hover:text-slate-300'
-                            : 'text-slate-600 hover:text-slate-800'
-                        }
-                      `}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                    >
-                      {tab.icon}
-                      <span>{tab.label}</span>
-                    </motion.button>
-                  ))}
-                </div>
-              </motion.div>
-              
-              {/* Search Box (simplified from CSE) */}
-              {showSearch && (
-                <div className="p-3 border-b border-slate-200 dark:border-slate-700 flex flex-col">
-                  <form onSubmit={handleSearchSubmit} className="flex items-center mb-2">
-                    <motion.input
-                      ref={searchInputRef}
-                      type="text"
-                      value={searchInput}
-                      onChange={(e) => setSearchInput(e.target.value)}
-                      placeholder="Search financial information..."
-                      className={`flex-1 px-4 py-2 rounded-l-md border-r-0 focus:outline-none transition-all border shadow-sm ${
-                        darkMode 
-                          ? 'bg-slate-800 border-slate-700 text-white' 
-                          : 'bg-white border-slate-200 text-slate-800'
-                      }`}
-                      animate={{
-                        backgroundColor: darkMode ? 'rgb(30, 41, 59)' : 'rgb(255, 255, 255)',
-                        borderColor: darkMode ? 'rgb(51, 65, 85)' : 'rgb(226, 232, 240)'
-                      }}
-                    />
-                    <Button
-                      type="submit"
-                      className={`rounded-l-none rounded-r-md px-4 py-2 h-full ${
-                        darkMode 
-                          ? 'bg-blue-600 hover:bg-blue-500 text-white' 
-                          : 'bg-blue-500 hover:bg-blue-400 text-white'
-                      }`}
-                    >
-                      <Search className="h-4 w-4 mr-1" />
-                      Search
-                    </Button>
-                  </form>
-                  
-                  <div className={`text-sm p-2 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                    {webSearchEnabled ? (
-                      <>
-                        <p>Web search is enabled! Your queries will be enhanced with real-time information from the web using Gemini API's grounding feature.</p>
-                      </>
-                    ) : (
-                      <>
-                        <p>Turn on web search in the header to enhance responses with real-time information from the web.</p>
-                      </>
-                    )}
-                  </div>
-                </div>
-              )}
-              
-              {/* Tab Content with Animation */}
-              <div className="flex-1 overflow-hidden">
-                <AnimatePresence mode="wait">
-                  {/* Chat Tab */}
-                  {activeTab === 'chat' && (
-                    <motion.div 
-                      key="chat-tab"
-                      className={`h-full flex flex-col transition-colors duration-300 ${darkMode ? 'text-slate-200' : 'text-slate-700'}`}
-                      variants={tabContentVariants}
-                      initial="hidden"
-                      animate="visible"
-                      exit="exit"
-                    >
-                      {/* Chat messages */}
-                      <div className="flex-1 overflow-y-auto p-5">
-                        {messages.filter(m => m.role !== 'system').map((message, index) => (
-                          renderMessage(message, index))
-                        )}
-                        {isLoading && (
-                          <div className="text-left mb-4">
-                            <div className={`
-                              inline-block max-w-[80%] px-5 py-3 rounded-2xl transition-colors duration-300
-                              ${darkMode ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-800'}
-                            `}>
-                              <div className="flex space-x-3">
-                                <div className="w-2 h-2 rounded-full bg-current animate-bounce"></div>
-                                <div className="w-2 h-2 rounded-full bg-current animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                                <div className="w-2 h-2 rounded-full bg-current animate-bounce" style={{ animationDelay: '0.4s' }}></div>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                        <div ref={messageEndRef} />
-                      </div>
-                      
-                      {/* Chat input */}
-                      <motion.form 
-                        onSubmit={handleSubmit} 
-                        animate={{
-                          backgroundColor: darkMode ? 'rgb(30, 41, 59)' : 'rgb(248, 250, 252)',
-                          borderColor: darkMode ? 'rgb(51, 65, 85)' : 'rgb(226, 232, 240)'
-                        }}
-                        className="p-4 border-t flex items-center"
-                      >
-                        <motion.input
-                          ref={inputRef}
-                          type="text"
-                          value={input}
-                          onChange={(e) => setInput(e.target.value)}
-                          placeholder="Ask about your portfolio..."
-                          disabled={isLoading}
-                          animate={{
-                            backgroundColor: darkMode ? 'rgb(15, 23, 42)' : 'rgb(255, 255, 255)',
-                            color: darkMode ? 'rgb(255, 255, 255)' : 'rgb(30, 41, 59)',
-                            borderColor: darkMode ? 'rgb(51, 65, 85)' : 'rgb(226, 232, 240)'
-                          }}
-                          className="flex-1 px-5 py-3 rounded-full focus:outline-none transition-all border shadow-sm focus:ring-2 focus:ring-emerald-500/50"
-                        />
-                        <Button
-                          type="submit"
-                          disabled={isLoading || !input.trim()}
-                          className={`
-                            ml-2 h-12 w-12 p-0 rounded-full flex items-center justify-center
-                            ${darkMode ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-emerald-500 hover:bg-emerald-400'}
-                            transition-all duration-200
-                          `}
-                        >
-                          <Send className="h-5 w-5 text-white" />
-                        </Button>
-                      </motion.form>
-                    </motion.div>
-                  )}
-                  
-                  {/* Stocks Tab */}
-                  {activeTab === 'stocks' && (
-                    <motion.div 
-                      key="stocks-tab"
-                      className="h-full overflow-y-auto p-5"
-                      variants={enhancedTabVariants}
-                      initial="hidden"
-                      animate="visible"
-                      exit="exit"
-                    >
-                      <motion.h3 
-                        className={`text-lg font-semibold mb-4 transition-colors duration-300 ${darkMode ? 'text-white' : 'text-slate-800'}`}
-                        variants={cardItemVariants}
-                      >
-                        Popular Stocks
-                      </motion.h3>
-                      
-                      {isStockLoading ? (
-                        <div className="flex justify-center items-center h-64">
-                          <div className="flex space-x-2">
-                            <div className="w-3 h-3 rounded-full bg-blue-500 animate-bounce"></div>
-                            <div className="w-3 h-3 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                            <div className="w-3 h-3 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '0.4s' }}></div>
-                          </div>
-                        </div>
-                      ) : stockData.length > 0 ? (
-                        <div>
-                          <motion.div 
-                            variants={cardItemVariants}
-                            className={`text-sm mb-4 transition-colors duration-300 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}
-                          >
-                            Click on any stock to ask the assistant about it
-                          </motion.div>
-                          {stockData.map((stock, index) => (
-                            <motion.div
-                              key={stock.symbol}
-                              variants={cardItemVariants}
-                              custom={index}
-                            >
-                              {renderStockCard(stock)}
-                            </motion.div>
-                          ))}
-                        </div>
-                      ) : (
-                        <motion.div 
-                          className={`p-4 rounded-xl mb-4 transition-colors duration-300 ${darkMode ? 'bg-slate-800' : 'bg-slate-100'}`}
-                          variants={cardItemVariants}
-                          animate={{
-                            backgroundColor: darkMode ? 'rgb(30, 41, 59)' : 'rgb(241, 245, 249)'
-                          }}
-                        >
-                          <p className={`text-sm transition-colors duration-300 ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>
-                            Unable to load stock data. Please try again later.
-                          </p>
-                        </motion.div>
-                      )}
-                    </motion.div>
-                  )}
-                  
-                  {/* Crypto Tab */}
-                  {activeTab === 'crypto' && (
-                    <motion.div 
-                      key="crypto-tab"
-                      className="h-full overflow-y-auto p-5"
-                      variants={enhancedTabVariants}
-                      initial="hidden"
-                      animate="visible"
-                      exit="exit"
-                    >
-                      <motion.h3 
-                        className={`text-lg font-semibold mb-4 transition-colors duration-300 ${darkMode ? 'text-white' : 'text-slate-800'}`}
-                        variants={cardItemVariants}
-                      >
-                        Top Cryptocurrencies
-                      </motion.h3>
-                      
-                      {isCryptoLoading ? (
-                        <div className="flex justify-center items-center h-64">
-                          <div className="flex space-x-2">
-                            <div className="w-3 h-3 rounded-full bg-emerald-500 animate-bounce"></div>
-                            <div className="w-3 h-3 rounded-full bg-emerald-500 animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                            <div className="w-3 h-3 rounded-full bg-emerald-500 animate-bounce" style={{ animationDelay: '0.4s' }}></div>
-                          </div>
-                        </div>
-                      ) : cryptoData.length > 0 ? (
-                        <div>
-                          <motion.div 
-                            variants={cardItemVariants}
-                            className={`text-sm mb-4 transition-colors duration-300 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}
-                          >
-                            Click on any cryptocurrency to ask the assistant about it
-                          </motion.div>
-                          {cryptoData.map((crypto, index) => (
-                            <motion.div
-                              key={crypto.id}
-                              variants={cardItemVariants}
-                              custom={index}
-                            >
-                              {renderCryptoCard(crypto)}
-                            </motion.div>
-                          ))}
-                        </div>
-                      ) : (
-                        <motion.div 
-                          className={`p-4 rounded-xl mb-4`}
-                          variants={cardItemVariants}
-                          animate={{
-                            backgroundColor: darkMode ? 'rgb(30, 41, 59)' : 'rgb(241, 245, 249)'
-                          }}
-                        >
-                          <p className={`text-sm transition-colors duration-300 ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>
-                            Unable to load cryptocurrency data. Please try again later.
-                          </p>
-                        </motion.div>
-                      )}
-                    </motion.div>
-                  )}
-                  
-                  {/* Insights Tab */}
-                  {activeTab === 'insights' && (
-                    <motion.div 
-                      key="insights-tab"
-                      className="h-full overflow-y-auto p-5"
-                      variants={tabContentVariants}
-                      initial="hidden"
-                      animate="visible"
-                      exit="exit"
-                    >
-                      <h3 className={`text-lg font-semibold mb-4 transition-colors duration-300 ${darkMode ? 'text-white' : 'text-slate-800'}`}>
-                        Financial Insights
-                      </h3>
-                      
-                      {insights.length > 0 ? (
-                        <div>
-                          <div className={`text-sm mb-4 transition-colors duration-300 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                            Charts created by the AI assistant
-                          </div>
-                          {insights.map((insight, index) => (
-                            <motion.div
-                              key={insight.id}
-                              initial={{ opacity: 0, y: 20 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              transition={{ 
-                                duration: 0.3,
-                                delay: index * 0.1,
-                                type: "spring",
-                                stiffness: 100
-                              }}
-                            >
-                              {renderInsightCard(insight)}
-                            </motion.div>
-                          ))}
-                        </div>
-                      ) : (
-                        <motion.div 
-                          className={`p-6 rounded-xl mb-4 text-center`}
-                          animate={{
-                            backgroundColor: darkMode ? 'rgb(30, 41, 59)' : 'rgb(241, 245, 249)'
-                          }}
-                        >
-                          <BarChart4 className="mx-auto h-12 w-12 mb-3 transition-colors duration-300" style={{ color: darkMode ? 'rgb(71, 85, 105)' : 'rgb(148, 163, 184)' }} />
-                          <h4 className={`text-lg font-medium mb-2 transition-colors duration-300 ${darkMode ? 'text-white' : 'text-slate-800'}`}>
-                            No insights yet
-                          </h4>
-                          <p className={`text-sm max-w-md mx-auto transition-colors duration-300 ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                            Ask the assistant to create charts for stocks or cryptocurrencies.
-                            For example, try asking "Show me a chart for Apple stock"
-                          </p>
-                          <Button
-                            onClick={() => {
-                              setActiveTab('chat');
-                              setInput('Show me a chart of the S&P 500 vs Bitcoin over the last month');
-                              setTimeout(() => {
-                                inputRef.current?.focus();
-                              }, 100);
-                            }}
-                            className="mt-4 transition-colors duration-300"
-                            style={{ 
-                              backgroundColor: darkMode ? 'rgb(51, 65, 85)' : 'rgb(226, 232, 240)',
-                              color: darkMode ? 'rgb(248, 250, 252)' : 'rgb(30, 41, 59)'
-                            }}
-                            variant="outline"
-                          >
-                            Create example chart
-                          </Button>
-                        </motion.div>
-                      )}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </>
-  );
-}

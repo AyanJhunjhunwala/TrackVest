@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Info, AlertCircle } from "lucide-react";
+import { Info, AlertCircle, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useTheme } from "./ThemeContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,6 +27,51 @@ import {
   getApiDate
 } from './hooks';
 
+// Welcome Modal Component
+const WelcomeModal = ({ isOpen, onClose, darkMode }) => {
+  if (!isOpen) return null;
+
+  return (
+    <motion.div 
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+    >
+      <motion.div 
+        className={`relative w-full max-w-md mx-auto rounded-xl overflow-hidden shadow-xl ${darkMode ? 'bg-slate-800' : 'bg-white'}`}
+        initial={{ scale: 0.9, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.9, y: 20 }}
+        transition={{ type: "spring", damping: 25 }}
+      >
+        <div className="p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-slate-800'}`}>Welcome to TrackVest</h2>
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={onClose}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          
+          <div className={`mb-6 ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+            <p className="mb-3">TrackVest is your all-in-one portfolio tracker for stocks, cryptocurrencies, and real estate investments.</p>
+            <p className="mb-3">Monitor your investments in real-time, analyze performance, and get AI-powered insights to make better investment decisions.</p>
+          </div>
+          
+          <div className="flex justify-end">
+            <Button 
+              onClick={onClose}
+              className={`${darkMode ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-emerald-500 hover:bg-emerald-400'} text-white`}
+            >
+              Get Started
+            </Button>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+};
+
 export default function TrackVestApp() {
   // State for API key
   const [apiKey, setApiKey] = useState("9h2tWR97GWuVzS5a27bqgC4JjhC3H1uv");
@@ -36,6 +81,9 @@ export default function TrackVestApp() {
 
   // Use theme context instead of local state
   const { darkMode, setDarkMode } = useTheme();
+  
+  // Welcome modal state
+  const [showWelcome, setShowWelcome] = useState(false);
   
   // Settings modal state
   const [showSettings, setShowSettings] = useState(false);
@@ -137,7 +185,19 @@ export default function TrackVestApp() {
     }
     link.href = '/src/trackvest.png';
     link.type = 'image/png';
+    
+    // Check if it's the first visit and show welcome modal
+    const hasVisitedBefore = localStorage.getItem('hasVisitedTrackVest');
+    if (!hasVisitedBefore) {
+      setShowWelcome(true);
+    }
   }, []);
+
+  // Function to handle closing the welcome modal
+  const closeWelcomeModal = () => {
+    setShowWelcome(false);
+    localStorage.setItem('hasVisitedTrackVest', 'true');
+  };
 
   // Update charts data
   const updateChartsData = (updatedPositions) => {
@@ -467,6 +527,14 @@ export default function TrackVestApp() {
           <SettingsModal
             isOpen={showSettings}
             onClose={() => setShowSettings(false)}
+            darkMode={darkMode}
+          />
+        )}
+        
+        {showWelcome && (
+          <WelcomeModal
+            isOpen={showWelcome}
+            onClose={closeWelcomeModal}
             darkMode={darkMode}
           />
         )}

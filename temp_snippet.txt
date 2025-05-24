@@ -1,0 +1,30 @@
+                    size="sm" 
+                    className="h-8 w-8 p-0 rounded-full"
+                    onClick={() => setShowSearch(!showSearch)}
+                  >
+                    <Search className="h-4 w-4" />
+                  </Button>
+                  <motion.span 
+                    className={`text-xs px-2 py-1 rounded-full`}
+                    animate={{
+                      backgroundColor: darkMode ? 'rgba(5, 150, 105, 0.2)' : 'rgb(209, 250, 229)',
+                      color: darkMode ? 'rgb(52, 211, 153)' : 'rgb(4, 120, 87)'
+                    }}
+                  >
+                    Powered by Gemini
+                  </motion.span>
+                </div>
+              </motion.div>
+              
+              {/* Tab Navigation with Animated Slider */}
+              <motion.div 
+                className={`px-2 py-2 border-b`}
+                animate={{
+                  backgroundColor: darkMode ? 'rgb(30, 41, 59)' : 'rgb(241, 245, 249)',
+                  borderColor: darkMode ? 'rgb(51, 65, 85)' : 'rgb(226, 232, 240)'
+                }}
+              >
+                <div className="flex space-x-1 relative">
+                  {/* Animated Slider Background */}
+                  <motion.div 
+                    className="absolute h-full rounded-lg transition-colors duration-300"

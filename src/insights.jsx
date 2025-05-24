@@ -7,6 +7,7 @@ import {
 } from "recharts";
 import Chart from "./components/ui/Chart";
 import ComparisonChart from "./components/ui/ComparisonChart";
+import DynamicPlotlyChart from "./components/ui/DynamicPlotlyChart";
 import { useAllChartsSubscription, chartEmitter } from './hooks/useChartSubscription';
 import { removeChartWithSubscription } from './services/chartDataService';
 
@@ -41,15 +42,16 @@ const CustomBarTooltip = ({ active, payload, label }) => {
 
 export default function InsightsTab({ 
   darkMode, 
-  riskData, 
-  assetAllocation,
-  carbonData, 
-  correlationData, 
-  sharpeRatios, 
-  volatilityData 
+  riskData = [], 
+  assetAllocation = [],
+  carbonData = [], 
+  correlationData = [], 
+  sharpeRatios = [], 
+  volatilityData = [] 
 }) {
   // Use our subscription hook to get all charts
   const { charts } = useAllChartsSubscription();
+  const [error, setError] = useState(null);
   
   // Function to delete a chart
   const handleDeleteChart = (chartId) => {
@@ -72,12 +74,70 @@ export default function InsightsTab({
     hidden: { opacity: 0, y: 20 },
     visible: { opacity: 1, y: 0, transition: { duration: 0.4 } }
   };
+
+  // Handle errors in rendering charts
+  const renderChart = (insight) => {
+    try {
+      // Check if this is a Plotly chart
+      if (insight.data && insight.data.plotlyConfig) {
+        return (
+          <DynamicPlotlyChart
+            chartId={insight.id}
+            darkMode={darkMode}
+          />
+        );
+      }
+      
+      // Handle comparison chart
+      if (insight.data && 
+          (insight.data.series || 
+           (insight.data.chartConfig && insight.data.chartConfig.type === 'comparison'))) {
+        return (
+          <ComparisonChart
+            data={(insight.data.chartConfig) ? insight.data.chartConfig.data : insight.data.data}
+            xKey={(insight.data.chartConfig) ? insight.data.chartConfig.xKey : insight.data.xKey}
+            series={Array.isArray(insight.data.series) ? 
+              insight.data.series : 
+              (insight.data.chartConfig && Array.isArray(insight.data.chartConfig.series)) ? 
+                insight.data.chartConfig.series : []}
+            title={(insight.data.chartConfig) ? insight.data.chartConfig.title : insight.data.title}
+            metricType={(insight.data.chartConfig) ? insight.data.chartConfig.metricType || 'Price (USD)' : 'Price (USD)'}
+            darkMode={darkMode}
+            onDelete={() => handleDeleteChart(insight.id)}
+          />
+        );
+      }
+      
+      // Standard chart as default
+      return (
+        <Chart
+          type={(insight.data && insight.data.chartConfig) ? insight.data.chartConfig.type : (insight.data ? insight.data.type : 'line')}
+          data={(insight.data && insight.data.chartConfig) ? insight.data.chartConfig.data : (insight.data ? insight.data.data : [])}
+          xKey={(insight.data && insight.data.chartConfig) ? insight.data.chartConfig.xKey : (insight.data ? insight.data.xKey : 'date')}
+          yKey={(insight.data && insight.data.chartConfig) ? insight.data.chartConfig.yKey : (insight.data ? insight.data.yKey : 'value')}
+          title={(insight.data && insight.data.chartConfig) ? insight.data.chartConfig.title : (insight.data ? insight.data.title : 'Chart')}
+          darkMode={darkMode}
+          onDelete={() => handleDeleteChart(insight.id)}
+        />
+      );
+    } catch (err) {
+      console.error("Error rendering chart:", err, insight);
+      return (
+        <div className={`flex items-center justify-center h-64 ${darkMode ? 'text-red-400' : 'text-red-500'}`}>
+          Error rendering chart
+        </div>
+      );
+    }
+  };
+  
+  // Safely check if we have valid chart data
+  const hasValidCharts = Array.isArray(charts) && charts.length > 0;
   
   // Render both the dynamic charts and the static visualizations
   return (
     <div className="space-y-8">
       {/* Dynamic Generated Charts from chartEmitter */}
-      {charts.length > 0 && (
+      {hasValidCharts && (
         <motion.div 
           initial="hidden"
           animate="visible"
@@ -101,31 +161,7 @@ export default function InsightsTab({
                 className="h-full"
               >
                 <Card className={`${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md h-full overflow-hidden`}>
-                  {/* Handle both direct chartData format and nested chartConfig format */}
-                  {(insight.chartData.series || (insight.chartData.chartConfig && insight.chartData.chartConfig.type === 'comparison')) ? (
-                    <ComparisonChart
-                      data={(insight.chartData.chartConfig) ? insight.chartData.chartConfig.data : insight.chartData.data}
-                      xKey={(insight.chartData.chartConfig) ? insight.chartData.chartConfig.xKey : insight.chartData.xKey}
-                      series={Array.isArray(insight.chartData.series) ? 
-                        insight.chartData.series : 
-                        (insight.chartData.chartConfig && Array.isArray(insight.chartData.chartConfig.series)) ? 
-                          insight.chartData.chartConfig.series : []}
-                      title={(insight.chartData.chartConfig) ? insight.chartData.chartConfig.title : insight.chartData.title}
-                      metricType={(insight.chartData.chartConfig) ? insight.chartData.chartConfig.metricType || 'Price (USD)' : 'Price (USD)'}
-                      darkMode={darkMode}
-                      onDelete={() => handleDeleteChart(insight.id)}
-                    />
-                  ) : (
-                    <Chart
-                      type={(insight.chartData.chartConfig) ? insight.chartData.chartConfig.type : insight.chartData.type}
-                      data={(insight.chartData.chartConfig) ? insight.chartData.chartConfig.data : insight.chartData.data}
-                      xKey={(insight.chartData.chartConfig) ? insight.chartData.chartConfig.xKey : insight.chartData.xKey}
-                      yKey={(insight.chartData.chartConfig) ? insight.chartData.chartConfig.yKey : insight.chartData.yKey}
-                      title={(insight.chartData.chartConfig) ? insight.chartData.chartConfig.title : insight.chartData.title}
-                      darkMode={darkMode}
-                      onDelete={() => handleDeleteChart(insight.id)}
-                    />
-                  )}
+                  {renderChart(insight)}
                 </Card>
               </motion.div>
             ))}
