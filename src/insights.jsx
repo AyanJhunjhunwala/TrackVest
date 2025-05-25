@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
+import { Trash2 } from "lucide-react";
 import { 
   ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, Tooltip, Cell,
   BarChart, Bar, LineChart as RechartsLineChart, Line, Legend, ResponsiveContainer
@@ -47,7 +49,9 @@ export default function InsightsTab({
   carbonData = [], 
   correlationData = [], 
   sharpeRatios = [], 
-  volatilityData = [] 
+  volatilityData = [],
+  investmentCategories = [],
+  onDeleteCategory
 }) {
   // Use our subscription hook to get all charts
   const { charts } = useAllChartsSubscription();
@@ -84,6 +88,7 @@ export default function InsightsTab({
           <DynamicPlotlyChart
             chartId={insight.id}
             darkMode={darkMode}
+            onDelete={() => handleDeleteChart(insight.id)}
           />
         );
       }
@@ -475,6 +480,174 @@ export default function InsightsTab({
           </motion.div>
         </div>
       </motion.div>
+
+      {/* Investment Categories Section */}
+      {investmentCategories.length > 0 && (
+        <motion.div 
+          initial="hidden"
+          animate="visible"
+          variants={containerVariants}
+          className="space-y-4"
+        >
+          <div className="flex items-center justify-between">
+            <h2 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-slate-800'}`}>
+              AI-Generated Investment Categories
+            </h2>
+            <div className={`text-xs px-2 py-1 rounded-full ${darkMode ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-100 text-purple-700'}`}>
+              Powered by Gemini AI
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {investmentCategories.map((category, index) => (
+              <motion.div 
+                key={category.id}
+                variants={itemVariants}
+                className="h-full"
+              >
+                <Card className={`${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-md h-full overflow-hidden hover:shadow-lg transition-shadow duration-200`}>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <CardTitle className={`${darkMode ? 'text-slate-200' : 'text-slate-800'} text-base font-semibold leading-tight`}>
+                          {category.name}
+                        </CardTitle>
+                        <div className="flex flex-wrap items-center gap-1 mt-1">
+                          <span className={`text-xs px-2 py-1 rounded-full ${
+                            category.riskLevel === 'High' ? 'bg-red-100 text-red-800' :
+                            category.riskLevel === 'Medium' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-green-100 text-green-800'
+                          }`}>
+                            {category.riskLevel} Risk
+                          </span>
+                          {category.source && (
+                            <span className={`text-xs px-2 py-1 rounded-full ${
+                              category.source === 'detailed' 
+                                ? darkMode ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-100 text-purple-700'
+                                : darkMode ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-700'
+                            }`}>
+                              {category.source === 'detailed' ? 'AI Research' : 'Quick Gen'}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onDeleteCategory && onDeleteCategory(category.id)}
+                        className={`h-8 w-8 p-0 ml-2 ${darkMode ? 'hover:bg-red-900/20 text-red-400' : 'hover:bg-red-50 text-red-500'}`}
+                        title="Delete Category"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'} line-clamp-2 mt-2`}>
+                      {category.description}
+                    </p>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <span className={`font-medium ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>Expected Return:</span>
+                        <div className={`text-sm font-semibold ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                          {category.expectedReturn}
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <span className={`font-medium ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>Time Horizon:</span>
+                        <div className={`text-sm ${darkMode ? 'text-slate-200' : 'text-slate-700'}`}>
+                          {category.timeHorizon}
+                        </div>
+                      </div>
+                      
+                      {category.estimatedAmount && category.estimatedAmount !== 'Not specified' && (
+                        <div className="col-span-2">
+                          <span className={`font-medium ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>Investment Amount:</span>
+                          <div className={`text-sm font-semibold ${darkMode ? 'text-blue-400' : 'text-blue-600'}`}>
+                            ${typeof category.estimatedAmount === 'number' 
+                              ? category.estimatedAmount.toLocaleString() 
+                              : category.estimatedAmount}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {category.keyMetrics && category.keyMetrics.length > 0 && (
+                      <div>
+                        <span className={`font-medium text-sm ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>Key Metrics:</span>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {category.keyMetrics.slice(0, 3).map((metric, idx) => (
+                            <span key={idx} className={`text-xs px-2 py-1 rounded ${darkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>
+                              {metric}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {category.recommendedAssets && category.recommendedAssets.length > 0 && (
+                      <div>
+                        <span className={`font-medium text-sm ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>Recommended Assets:</span>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {category.recommendedAssets.slice(0, 4).map((asset, idx) => (
+                            <span key={idx} className={`text-xs px-2 py-1 rounded ${darkMode ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-700'}`}>
+                              {asset.symbol}
+                              {asset.currentPrice && <span className="ml-1 text-green-600">${asset.currentPrice}</span>}
+                            </span>
+                          ))}
+                          {category.recommendedAssets.length > 4 && (
+                            <span className={`text-xs px-2 py-1 rounded ${darkMode ? 'bg-slate-600 text-slate-300' : 'bg-slate-200 text-slate-600'}`}>
+                              +{category.recommendedAssets.length - 4} more
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {category.webSources && category.webSources.length > 0 && (
+                      <div>
+                        <span className={`font-medium text-sm ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>Research Sources:</span>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {category.webSources.slice(0, 2).map((source, idx) => (
+                            <a 
+                              key={idx} 
+                              href={source} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className={`text-xs px-2 py-1 rounded hover:underline ${darkMode ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-100 text-purple-700'}`}
+                            >
+                              Source {idx + 1}
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className={`${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                          Rebalance: {category.rebalancingFrequency}
+                        </span>
+                        <span className={`${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                          Created {new Date(category.createdAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                      {category.lastUpdated && (
+                        <div className="mt-1">
+                          <span className={`text-xs ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                            Research updated: {new Date(category.lastUpdated).toLocaleDateString()}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+      )}
     </div>
   );
 }

@@ -1,8 +1,9 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { chartEmitter } from '../hooks/useChartSubscription';
 
-// Initialize Google Generative AI with API key
-const genAI = new GoogleGenerativeAI(localStorage.getItem('geminiApiKey') || "AIzaSyDJ7tT1DyZ4FnSWIc4UazjYL4gGCo6vN0Y");
+// Initialize Google Generative AI
+const getGeminiApiKey = () => localStorage.getItem('geminiApiKey') || '';
+const genAI = new GoogleGenerativeAI(getGeminiApiKey());
 
 // Function declaration for creating a Plotly chart
 const plotlyChartFunctionDeclaration = {

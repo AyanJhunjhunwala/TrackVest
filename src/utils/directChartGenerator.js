@@ -2,8 +2,9 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { chartEmitter } from '../hooks/useChartSubscription';
 import { subscribeToStockUpdates, subscribeToComparisonUpdates } from '../services/chartDataService';
 
-// Initialize with API key
-const genAI = new GoogleGenerativeAI("AIzaSyDJ7tT1DyZ4FnSWIc4UazjYL4gGCo6vN0Y");
+// Initialize with API key from localStorage
+const getGeminiApiKey = () => localStorage.getItem('geminiApiKey') || '';
+const genAI = new GoogleGenerativeAI(getGeminiApiKey());
 
 // Define function declarations for chart generation
 const lineChartFunctionDeclaration = {
@@ -527,10 +528,15 @@ const generateChartCodeWithGemini = async (chartRequest) => {
  */
 
 // Add Polygon API helper functions
-const POLYGON_API_KEY = localStorage.getItem('polygonApiKey') || "9h2tWR97GWuVzS5a27bqgC4JjhC3H1uv"; // Use localStorage value or specified API key
+const POLYGON_API_KEY = localStorage.getItem('polygonApiKey') || ''; // Use localStorage value
 
 // Fetch historical stock data from Polygon API
 async function fetchPolygonStockData(symbol, timeframe = '1m') {
+  if (!POLYGON_API_KEY) {
+    console.warn('No Polygon API key found, using fallback data');
+    return generateFallbackStockData(symbol, 30);
+  }
+  
   try {
     // Convert timeframe to API parameters
     const endDate = new Date().toISOString().split('T')[0];

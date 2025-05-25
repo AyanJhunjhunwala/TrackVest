@@ -9,8 +9,8 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Configure the API
-const API_KEY = "AIzaSyDJ7tT1DyZ4FnSWIc4UazjYL4gGCo6vN0Y";
+// Configuration
+const API_KEY = process.env.GEMINI_API_KEY || '';
 const genAI = new GoogleGenerativeAI(API_KEY);
 
 // Path to save the generated chart data

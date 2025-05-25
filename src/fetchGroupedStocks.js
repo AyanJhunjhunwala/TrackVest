@@ -7,8 +7,8 @@
 
 import { getApiDate, formatMarketDate } from './hooks';
 
-// Default API key from localStorage or use the backup key
-const getPolygonApiKey = () => localStorage.getItem('polygonApiKey') || "9h2tWR97GWuVzS5a27bqgC4JjhC3H1uv";
+// API Configuration
+const getPolygonApiKey = () => localStorage.getItem('polygonApiKey') || '';
 
 /**
  * Fetch grouped stock data for a specific date

@@ -1,7 +1,7 @@
 import { useRef } from "react";
 
-// Polygon.io API key
-const POLYGON_API_KEY = "9h2tWR97GWuVzS5a27bqgC4JjhC3H1uv";
+// Polygon.io API configuration
+const getPolygonApiKey = () => localStorage.getItem('polygonApiKey') || '';
 
 // Debounce utility function
 export function debounce(func, wait) {
@@ -215,7 +215,7 @@ let marketDataCache = {
 // Function to fetch all stock data for a specific day
 export const fetchDailyMarketData = async (apiKey) => {
     // Use the hardcoded Polygon key if none provided
-    const key = apiKey || POLYGON_API_KEY;
+    const key = apiKey || getPolygonApiKey();
     if (!key) throw new Error("API key not set.");
     
     // Get previous valid market day
@@ -441,7 +441,7 @@ async function fetchSpecificDateData(specificDate, apiKey) {
 // API functions - updated to use the cached grouped data when possible
 export const fetchStockPrice = async (symbol, apiKey) => {
     // Use the hardcoded Polygon key if none provided
-    const key = apiKey || POLYGON_API_KEY;
+    const key = apiKey || getPolygonApiKey();
     if (!key) throw new Error("API key not set.");
     
     try {
@@ -543,7 +543,7 @@ export const fetchStockPrice = async (symbol, apiKey) => {
 
 export const fetchCryptoPrice = async (symbol, apiKey) => {
     // Use the hardcoded Polygon key if none provided
-    const key = apiKey || POLYGON_API_KEY;
+    const key = apiKey || getPolygonApiKey();
     if (!key) throw new Error("API key not set.");
     
     try {

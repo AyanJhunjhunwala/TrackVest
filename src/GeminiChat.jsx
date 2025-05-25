@@ -28,7 +28,7 @@ import { createTestStockChart, createTestComparisonChart, createIntelligentChart
 import { analyzeChartIntent, createStockPriceChart, createComparisonChart } from './utils/plotlyChartGenerator'; // Add this import
 
 // Initialize Google Generative AI with API key (revert to original class)
-const genAI = new GoogleGenerativeAI(localStorage.getItem('geminiApiKey') || "AIzaSyDJ7tT1DyZ4FnSWIc4UazjYL4gGCo6vN0Y");
+const genAI = new GoogleGenerativeAI(localStorage.getItem('geminiApiKey') || '');
 
 // API endpoints for data fetching
 const CRYPTO_PRICE_API = "https://api.coingecko.com/api/v3";
@@ -222,7 +222,7 @@ const fetchTopCryptos = async (limit = 10) => {
 };
 
 // Replace the Alpha Vantage API key reference
-const POLYGON_API_KEY = localStorage.getItem('polygonApiKey') || "9h2tWR97GWuVzS5a27bqgC4JjhC3H1uv";
+const POLYGON_API_KEY = localStorage.getItem('polygonApiKey') || '';
 
 // Fetch stock data using Polygon grouped API instead of individual API calls
 const fetchPopularStocks = async () => {
@@ -400,36 +400,33 @@ const cardItemVariants = {
 const formatMessageContent = (content) => {
   if (!content) return '';
   
-  // Replace code blocks with styled versions
-  let formattedContent = content.replace(/```([a-z]*)\n([\s\S]*?)\n```/g, (match, language, code) => {
-    return `<div class="bg-gray-800 rounded-md p-3 my-2 overflow-x-auto">
-      <pre class="text-xs text-gray-200 font-mono">${code}</pre>
-    </div>`;
+  // For plain text rendering, just clean up the content without HTML
+  let formattedContent = content;
+  
+  // Remove markdown formatting for plain text display
+  formattedContent = formattedContent.replace(/```([a-z]*)\n([\s\S]*?)\n```/g, (match, language, code) => {
+    return `\n${code}\n`;
   });
   
-  // Format inline code
-  formattedContent = formattedContent.replace(/`([^`]+)`/g, '<code class="bg-gray-800 px-1 rounded text-xs text-gray-200 font-mono">$1</code>');
+  // Remove inline code backticks
+  formattedContent = formattedContent.replace(/`([^`]+)`/g, '$1');
   
-  // Format bold text
-  formattedContent = formattedContent.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  // Remove bold markdown
+  formattedContent = formattedContent.replace(/\*\*([^*]+)\*\*/g, '$1');
   
-  // Format italics
-  formattedContent = formattedContent.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  // Remove italic markdown
+  formattedContent = formattedContent.replace(/\*([^*]+)\*/g, '$1');
   
-  // Format lists
-  formattedContent = formattedContent.replace(/^\s*[\-\*]\s+(.+)$/gm, '<li class="ml-4">• $1</li>');
-  formattedContent = formattedContent.replace(/(<li.*<\/li>)\s*(<li.*<\/li>)/g, '<ul class="my-2">$1$2</ul>');
+  // Convert bullet points to simple text
+  formattedContent = formattedContent.replace(/^\s*[\-\*]\s+(.+)$/gm, '• $1');
   
-  // Format numbered lists
-  formattedContent = formattedContent.replace(/^\s*(\d+)\.\s+(.+)$/gm, '<li class="ml-4">$1. $2</li>');
+  // Convert numbered lists
+  formattedContent = formattedContent.replace(/^\s*(\d+)\.\s+(.+)$/gm, '$1. $2');
   
-  // Format links
-  formattedContent = formattedContent.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" class="text-blue-400 underline">$1</a>');
+  // Remove link markdown
+  formattedContent = formattedContent.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1');
   
-  // Handle paragraphs
-  formattedContent = formattedContent.replace(/\n\n/g, '</p><p class="mb-2">');
-  
-  return `<p class="mb-2">${formattedContent}</p>`;
+  return formattedContent;
 };
 
 /**
@@ -514,7 +511,7 @@ const extractTickerSymbolsRegex = (query) => {
     .filter(m => !commonWords.includes(m));
 };
 
-export default function GeminiChat({ darkMode, positions = [], realEstateHoldings = [], onAddInsight }) {
+export default function GeminiChat({ darkMode, positions = [], realEstateHoldings = [], onAddInsight, demoMode }) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
     { role: 'system', content: 'You are a helpful financial assistant. You can provide information and insights about stocks, cryptocurrencies, and real estate investments.' },
@@ -762,65 +759,116 @@ If users ask about importing or feeding in more data, remind them they can use t
   const sendMessage = async () => {
     if (!input.trim()) return;
     
-    const userMessage = { role: 'user', content: input };
-    setMessages(prev => [...prev, userMessage]);
+    const userMessage = input.trim();
     setInput('');
     setIsLoading(true);
-    setGroundingData(null);
-
+    
+    // Add user message
+    const newMessages = [...messages, { role: 'user', content: userMessage }];
+    setMessages(newMessages);
+    
     try {
+      // Check if we have a valid Gemini API key
+      const geminiApiKey = localStorage.getItem('geminiApiKey');
+      const hasValidGeminiKey = !!(geminiApiKey && geminiApiKey.trim() && geminiApiKey.length > 10);
+      
+      if (!hasValidGeminiKey) {
+        // Demo mode response
+        const demoResponse = `I'm TrackVest AI running in demo mode. To unlock full AI capabilities including:
+
+• Real-time market analysis
+• Personalized investment advice  
+• AI-powered chart generation
+• Property valuations
+• Portfolio optimization
+
+Please add your Gemini API key in Settings. 
+
+For now, I can provide basic portfolio information based on your current holdings:
+- Total Portfolio Value: $${(positions.reduce((sum, p) => sum + p.value, 0) + realEstateHoldings.reduce((sum, p) => sum + (p.currentValue - (p.mortgage || 0)), 0)).toLocaleString()}
+- Stock/Crypto Holdings: ${positions.length} assets
+- Real Estate Properties: ${realEstateHoldings.length} properties
+
+Would you like me to help you set up API access for full functionality?`;
+
+        setMessages([...newMessages, { 
+          role: 'assistant', 
+          content: demoResponse,
+          isDemo: true
+        }]);
+        setIsLoading(false);
+        return;
+      }
+      
       // Get current portfolio data for directly including in each prompt
       const currentPortfolioSummaryText = createPortfolioSummaryText(formatPortfolioData(positions, realEstateHoldings));
       
-      // Create the prompt
+      // Create the prompt with TrackVest AI persona
       const promptContent = `
-        ${input}
+        You are TrackVest AI, a sophisticated financial assistant built into the TrackVest investment tracking platform. You help users analyze their portfolios, understand market trends, and make informed investment decisions.
+
+        User Query: ${userMessage}
         
-        IMPORTANT: I'm providing you with the user's current portfolio data right now. You MUST use this information to answer questions about their holdings:
-        
+        Current Portfolio Data:
         ${currentPortfolioSummaryText}
         
-        VERY IMPORTANT: 
-        - You have real-time access to financial data. NEVER tell the user you don't have access to current market data.
-        - For questions about metrics like P/E ratios, debt ratios, or financial indicators, provide the information directly.
-        - Do not refer users to external websites for basic stock information or metrics.
-        ${webSearchEnabled ? '- When you use search results, properly attribute the information with sources.' : ''}
+        IMPORTANT GUIDELINES:
+        - You are TrackVest AI, always respond as a helpful financial assistant
+        - NEVER show code, technical implementation details, or mention programming
+        - Provide clear, actionable financial insights and advice
+        - Use the portfolio data to give personalized recommendations
+        - When creating charts or analysis, simply tell the user you've added it to their Insights tab
+        - Be conversational and professional, like a financial advisor
+        - If you don't have specific data, provide general market insights
+        ${webSearchEnabled ? '- When using search results, cite your sources naturally in conversation' : ''}
         
-        Format ticker symbols exactly like this at the end of your response:
-        TICKER_SYMBOLS: AAPL, MSFT, GOOGL
+        For ticker symbol extraction (internal use only):
+        TICKER_SYMBOLS: [extract any mentioned stock symbols here, or NONE if none mentioned]
         
-        Use a comma-separated list, not square brackets.
-        If no ticker symbols are mentioned, include "TICKER_SYMBOLS: NONE"
-        Only include actual ticker symbols, not company names or other words.
-        
-        CHART CREATION RULES:
-        - When the user asks for a chart or graph, CREATE INTERACTIVE PLOTLY CHARTS using the plotlyChartGenerator
-        - Use Plotly.js for all charts - it offers better interactivity and features compared to Recharts
-        - Ensure all charts have range sliders, zoom capabilities, and appropriate tooltips
-        - For stock charts, automatically include technical indicators like SMA when appropriate
-        - For any chart request, extract the stock symbols and time period to fetch the appropriate data
-        - Tell the user that you've added the chart to their Insights tab
-        
-        If the user asks about importing or feeding in more data, explain they can use the "Import Portfolio" button in the header.
-        
-        Give me condensed outputs and properly formatted.
+        Respond as TrackVest AI would - helpful, knowledgeable, and focused on the user's financial success.
       `;
 
-      // Create a Gemini model instance
-      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+      // Get API key from localStorage
+      const apiKey = localStorage.getItem('geminiApiKey') || '';
       
-      // Prepare config for search grounding if enabled
-      const generationConfig = {};
-      const safetySettings = [];
+      // Create fresh API instance to ensure we use the current key
+      const freshGenAI = new GoogleGenerativeAI(apiKey);
+      
+      // Create a Gemini model instance with proper error handling
+      const model = freshGenAI.getGenerativeModel({ 
+        model: "gemini-2.0-flash",
+        safetySettings: [
+          {
+            category: "HARM_CATEGORY_HARASSMENT",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE"
+          },
+          {
+            category: "HARM_CATEGORY_HATE_SPEECH", 
+            threshold: "BLOCK_MEDIUM_AND_ABOVE"
+          },
+          {
+            category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE"
+          },
+          {
+            category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+            threshold: "BLOCK_MEDIUM_AND_ABOVE"
+          }
+        ]
+      });
       
       // Configure tools array for search if enabled
       const tools = webSearchEnabled ? [{ googleSearch: {} }] : undefined;
       
-      // Call the Gemini API with the original SDK structure
+      // Call the Gemini API with proper error handling
       const result = await model.generateContent({
         contents: [{ role: "user", parts: [{ text: promptContent }] }],
-        generationConfig,
-        safetySettings,
+        generationConfig: {
+          temperature: 0.7,
+          topK: 40,
+          topP: 0.95,
+          maxOutputTokens: 8192
+        },
         tools
       });
       
@@ -859,7 +907,7 @@ If users ask about importing or feeding in more data, remind them they can use t
       // Only use Gemini for extraction if no tickers were found in the TICKER_SYMBOLS line
       const tickerSymbols = extractedTickers.length > 0 ? 
         extractedTickers : 
-        await extractTickerSymbols(input);
+        await extractTickerSymbols(userMessage);
       
       console.log("Extracted tickers:", tickerSymbols);
       
@@ -877,14 +925,14 @@ If users ask about importing or feeding in more data, remind them they can use t
       // Determine if a chart was actually requested
       const chartRequestKeywords = ['chart', 'graph', 'plot', 'visualize', 'visualization', 'show me'];
       const containsChartRequest = chartRequestKeywords.some(keyword => 
-        input.toLowerCase().includes(keyword)
+        userMessage.toLowerCase().includes(keyword)
       );
       
       // Only create charts if explicitly requested and we have ticker symbols
       if (containsChartRequest && tickerSymbols.length > 0) {
         try {
           // Analyze the query to determine chart intent
-          const intent = await analyzeChartIntent(input);
+          const intent = await analyzeChartIntent(userMessage);
           console.log("Chart intent analysis:", intent);
           
           // Generate unique chart ID
@@ -1028,133 +1076,46 @@ If users ask about importing or feeding in more data, remind them they can use t
   // Render a message with improved UI
   const renderMessage = (message, index) => {
     const isUser = message.role === 'user';
+    const isDemo = message.isDemo;
     
     return (
-      <motion.div 
+      <motion.div
         key={index}
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.1 * (index % 3) }}
-        className={`p-4 my-3 rounded-2xl shadow-sm ${
-          isUser 
-          ? `${darkMode ? 'bg-blue-600 bg-gradient-to-br from-blue-500 to-blue-700' : 'bg-blue-500 bg-gradient-to-br from-blue-400 to-blue-600'} text-white ml-auto` 
-          : `${darkMode ? 'bg-slate-800 border border-slate-700 bg-gradient-to-br from-slate-800 to-slate-900' : 'bg-white border border-slate-200 bg-gradient-to-br from-slate-50 to-white'} ${darkMode ? 'text-white' : 'text-slate-800'}`
-        } ${isUser ? 'max-w-[80%]' : 'max-w-[90%]'}`}
+        transition={{ duration: 0.3, delay: index * 0.1 }}
+        className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}
       >
-        <div className="mb-1 flex items-center">
-          <div className={`w-7 h-7 mr-2 rounded-full flex items-center justify-center ${
-            isUser ? (darkMode ? 'bg-blue-400' : 'bg-blue-400') : (darkMode ? 'bg-emerald-600' : 'bg-emerald-500')
-          }`}>
-            <span className="text-xs text-white font-bold">
-              {isUser ? 'Y' : 'AI'}
-            </span>
+        <div className={`max-w-[80%] ${isUser ? 'order-2' : 'order-1'}`}>
+          {!isUser && (
+            <div className="flex items-center gap-2 mb-1">
+              <div className={`w-6 h-6 rounded-full flex items-center justify-center ${darkMode ? 'bg-emerald-600' : 'bg-emerald-500'}`}>
+                <span className="text-white text-xs font-bold">AI</span>
+              </div>
+              <span className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                TrackVest AI
+              </span>
+              {isDemo && (
+                <span className="text-xs px-2 py-0.5 bg-yellow-100 text-yellow-800 rounded">
+                  DEMO
+                </span>
+              )}
+            </div>
+          )}
+          <div
+            className={`p-3 rounded-lg ${
+              isUser
+                ? darkMode ? 'bg-emerald-600 text-white' : 'bg-emerald-500 text-white'
+                : isDemo
+                  ? darkMode ? 'bg-yellow-900/20 border border-yellow-700 text-yellow-200' : 'bg-yellow-50 border border-yellow-200 text-yellow-800'
+                  : darkMode ? 'bg-slate-700 text-slate-100' : 'bg-slate-100 text-slate-800'
+            }`}
+          >
+            <div className="whitespace-pre-wrap text-sm">
+              {formatMessageContent(message.content)}
+            </div>
           </div>
-          <span className={`text-xs font-medium ${isUser ? 'text-blue-200' : darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-            {isUser ? 'You' : 'TrackVest AI'}
-          </span>
         </div>
-        
-        <div 
-          className="ml-8 text-sm leading-relaxed font-light message-content"
-          dangerouslySetInnerHTML={{ __html: isUser ? message.content : formatMessageContent(message.content) }}
-        />
-        
-        {/* Render grounding sources if available */}
-        {!isUser && message.groundingData && (
-          <div className="mt-4 ml-8 rounded-lg overflow-hidden">
-            {/* Grounding chunks with improved styling */}
-            {message.groundingData.groundingChunks && message.groundingData.groundingChunks.length > 0 && (
-              <div className={`p-3 ${darkMode ? 'bg-slate-700 bg-opacity-40' : 'bg-blue-50'} rounded-t-lg border-b ${darkMode ? 'border-slate-600' : 'border-blue-100'}`}>
-                <div className={`text-xs font-medium mb-2 ${darkMode ? 'text-blue-300' : 'text-blue-600'} flex items-center`}>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M18 8a6 6 0 01-7.743 5.743L10 14l-1 1-1 1H6v-1l1-1-1-1H3v-1l2-2a1 1 0 011-1h2a9 9 0 019-9zm-1 5v1a5 5 0 01-5 5H7.258l-3-3H6v-1l.244-.244A5.984 5.984 0 016 10a6 6 0 019-6 6 6 0 012.973 11zm-1-2h-1a1 1 0 01-1-1V8a1 1 0 011-1h1a1 1 0 011 1v2a1 1 0 01-1 1z" clipRule="evenodd" />
-                  </svg>
-                  SOURCES
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {message.groundingData.groundingChunks.map((chunk, i) => (
-                    <a 
-                      key={i}
-                      href={chunk.web?.uri || '#'} 
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={`text-xs px-3 py-1.5 rounded-full flex items-center ${
-                        darkMode ? 'bg-slate-600 hover:bg-slate-500 text-white' : 'bg-white hover:bg-blue-50 text-blue-700 border border-blue-200'
-                      } transition-colors duration-150`}
-                    >
-                      <span className={`w-3 h-3 rounded-full mr-1.5 ${darkMode ? 'bg-blue-400' : 'bg-blue-500'}`}></span>
-                      {chunk.web?.title || `Source ${i+1}`}
-                    </a>
-                  ))}
-                </div>
-              </div>
-            )}
-            
-            {/* Web search queries with improved styling */}
-            {message.groundingData.webSearchQueries && message.groundingData.webSearchQueries.length > 0 && (
-              <div className={`p-3 ${darkMode ? 'bg-slate-700 bg-opacity-20' : 'bg-gray-50'} rounded-b-lg`}>
-                <div className={`text-xs font-medium mb-2 ${darkMode ? 'text-slate-400' : 'text-slate-500'} flex items-center`}>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
-                  </svg>
-                  RELATED SEARCHES
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {message.groundingData.webSearchQueries.map((query, i) => (
-                    <span 
-                      key={i} 
-                      className={`text-xs px-3 py-1.5 rounded-full ${
-                        darkMode ? 'bg-slate-800 text-slate-300' : 'bg-gray-100 text-slate-600'
-                      }`}
-                    >
-                      {query}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-            
-            {/* Grounding supports visualization (confidence scores) */}
-            {message.groundingData.groundingSupports && message.groundingData.groundingSupports.length > 0 && (
-              <div className={`px-3 pt-1 pb-3 ${darkMode ? 'bg-slate-700 bg-opacity-20' : 'bg-gray-50'} rounded-b-lg`}>
-                <div className="flex flex-col gap-2 mt-2">
-                  {message.groundingData.groundingSupports.map((support, i) => (
-                    <div key={i} className="text-xs">
-                      <div className={`mb-1 ${
-                        support.confidenceScores && Math.max(...support.confidenceScores) > 0.8
-                          ? darkMode ? 'text-green-300' : 'text-green-600'
-                          : darkMode ? 'text-yellow-300' : 'text-yellow-600'
-                      }`}>
-                        {support.segment?.text && (
-                          <span className="font-medium">
-                            {support.segment.text.length > 100 
-                              ? support.segment.text.substring(0, 100) + '...' 
-                              : support.segment.text}
-                          </span>
-                        )}
-                      </div>
-                      
-                      {support.confidenceScores && support.confidenceScores.length > 0 && (
-                        <div className="h-1.5 w-full bg-gray-300 rounded-full overflow-hidden">
-                          <div 
-                            className={`h-full ${
-                              Math.max(...support.confidenceScores) > 0.8
-                                ? 'bg-green-500' 
-                                : Math.max(...support.confidenceScores) > 0.5
-                                  ? 'bg-yellow-500'
-                                  : 'bg-red-500'
-                            }`}
-                            style={{ width: `${Math.max(...support.confidenceScores) * 100}%` }}
-                          ></div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
       </motion.div>
     );
   };
@@ -1567,31 +1528,41 @@ If users ask about importing or feeding in more data, remind them they can use t
                   borderColor: darkMode ? 'rgb(51, 65, 85)' : 'rgb(226, 232, 240)'
                 }}
               >
-                <h3 className={`font-semibold transition-colors duration-300 ${darkMode ? 'text-white' : 'text-slate-800'}`}>
-                  TrackVest AI Assistant
-                </h3>
-                <div className="flex items-center space-x-2">
-                  <Button 
-                    variant={webSearchEnabled ? "default" : "ghost"}
-                    size="sm" 
-                    className={`h-8 p-0 px-2 rounded-full text-xs flex items-center ${
-                      webSearchEnabled ? 
-                        (darkMode ? "bg-emerald-600 text-white" : "bg-emerald-500 text-white") : 
-                        ""
-                    }`}
-                    onClick={() => setWebSearchEnabled(!webSearchEnabled)}
-                  >
-                    <Zap className="h-3 w-3 mr-1" />
-                    {webSearchEnabled ? "Web Search: ON" : "Web Search"}
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-8 w-8 p-0 rounded-full"
-                    onClick={() => setShowSearch(!showSearch)}
-                  >
-                    <Search className="h-4 w-4" />
-                  </Button>
+                <div className={`flex items-center justify-between p-4 border-b ${darkMode ? 'border-slate-700' : 'border-slate-200'}`}>
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${darkMode ? 'bg-emerald-600' : 'bg-emerald-500'}`}>
+                      <span className="text-white text-sm font-bold">AI</span>
+                    </div>
+                    <div>
+                      <h3 className={`font-semibold ${darkMode ? 'text-white' : 'text-slate-800'}`}>TrackVest AI</h3>
+                      <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                        {!demoMode?.gemini ? 'Demo Mode - Limited Functionality' : 'Investment Assistant'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Button 
+                      variant={webSearchEnabled ? "default" : "ghost"}
+                      size="sm" 
+                      className={`h-8 p-0 px-2 rounded-full text-xs flex items-center ${
+                        webSearchEnabled ? 
+                          (darkMode ? "bg-emerald-600 text-white" : "bg-emerald-500 text-white") : 
+                          ""
+                      }`}
+                      onClick={() => setWebSearchEnabled(!webSearchEnabled)}
+                    >
+                      <Zap className="h-3 w-3 mr-1" />
+                      {webSearchEnabled ? "Web Search: ON" : "Web Search"}
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-8 w-8 p-0 rounded-full"
+                      onClick={() => setShowSearch(!showSearch)}
+                    >
+                      <Search className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               </motion.div>
               

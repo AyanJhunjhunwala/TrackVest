@@ -1,8 +1,9 @@
 import { chartEmitter } from '../hooks/useChartSubscription';
 import { restClient } from '@polygon.io/client-js';
 
-// Polygon API key
-const POLYGON_API_KEY = localStorage.getItem('polygonApiKey') || "9h2tWR97GWuVzS5a27bqgC4JjhC3H1uv";
+// API Configuration
+const getPolygonApiKey = () => localStorage.getItem('polygonApiKey') || '';
+const POLYGON_API_KEY = getPolygonApiKey();
 const polygonClient = restClient(POLYGON_API_KEY);
 
 // Map of active subscriptions
@@ -916,7 +917,6 @@ export const fetchStockPriceHistory = async (symbol, timeframe = '1m') => {
     }
     
     // Fetch from Polygon API
-    const POLYGON_API_KEY = localStorage.getItem('polygonApiKey') || "9h2tWR97GWuVzS5a27bqgC4JjhC3H1uv";
     const apiUrl = `https://api.polygon.io/v2/aggs/ticker/${symbol}/range/${timeSettings.multiplier}/${timeSettings.timespan}/${startDateStr}/${endDateStr}?apiKey=${POLYGON_API_KEY}`;
     
     const response = await fetch(apiUrl);

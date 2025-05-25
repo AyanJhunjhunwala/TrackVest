@@ -93,7 +93,7 @@ export default function SearchBar({
         } else if (response.status === 429) {
           throw new Error(`Rate limit exceeded. Please try again later.`);
         } else {
-          throw new Error(`Network error (${response.status}): ${response.statusText}`);
+        throw new Error(`Network error (${response.status}): ${response.statusText}`);
         }
       }
       
@@ -117,13 +117,13 @@ export default function SearchBar({
           // Extract relevant fields from the Polygon response
           // Example: {"ticker":"IONQ","name":"IonQ, Inc.","market":"stocks","locale":"us","primary_exchange":"XNYS",...}
           return {
-            symbol: stock.ticker,
+          symbol: stock.ticker,
             name: stock.name || stock.ticker,
-            price: "0.00", // We'll fetch this from the quote endpoint
+          price: "0.00", // We'll fetch this from the quote endpoint
             type: stock.type || "Equity",
             region: stock.locale === "us" ? "United States" : (stock.locale || "Global"),
             exchange: stock.primary_exchange || "",
-            sector: stock.sic_description || "",
+          sector: stock.sic_description || "",
             logoUrl: getStockLogo(stock.ticker),
             fromCache: isFromCache
           };
@@ -295,7 +295,7 @@ export default function SearchBar({
         } else if (response.status === 429) {
           throw new Error(`Rate limit exceeded. Please try again later.`);
         } else {
-          throw new Error(`Network error (${response.status}): ${response.statusText}`);
+        throw new Error(`Network error (${response.status}): ${response.statusText}`);
         }
       }
       
@@ -329,7 +329,7 @@ export default function SearchBar({
           return {
             symbol: symbol,
             name: crypto.name || symbol,
-            price: "0.00", // We'll fetch this from the quote endpoint
+          price: "0.00", // We'll fetch this from the quote endpoint
             type: crypto.type || "Cryptocurrency",
             region: crypto.locale || "Global",
             exchange: crypto.primary_exchange || "",
@@ -657,19 +657,19 @@ export default function SearchBar({
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 rounded-md overflow-hidden flex-shrink-0">
-                        <img 
-                          src={item.logoUrl} 
-                          alt={item.symbol} 
+                    <img 
+                      src={item.logoUrl} 
+                      alt={item.symbol}
                           className="w-full h-full object-cover"
-                          onError={(e) => {
-                            e.target.onerror = null;
+                      onError={(e) => {
+                        e.target.onerror = null;
                             e.target.src = `https://ui-avatars.com/api/?name=${item.symbol}&background=random&color=fff&size=128`;
-                          }}
-                        />
-                      </div>
+                      }}
+                    />
+                  </div>
                       <div>
                         <div className="font-medium flex items-center gap-1">
-                          {item.symbol}
+                        {item.symbol} 
                           {item.simulated && (
                             <span className={`text-xxs px-1 py-0.5 rounded ${
                               darkMode ? 'bg-amber-900/30 text-amber-400' : 'bg-amber-100 text-amber-800'
@@ -682,12 +682,12 @@ export default function SearchBar({
                               darkMode ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-800'
                             }`}>
                               cached
-                            </span>
+                        </span>
                           )}
                         </div>
                         <div className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                           {item.name?.length > 30 ? item.name.substring(0, 27) + '...' : item.name}
-                        </div>
+                      </div>
                       </div>
                     </div>
                     <div className="text-right">

@@ -352,11 +352,11 @@ const generateFallbackResults = (query, marketType) => {
 app.get('/api/polygon/search', async (req, res) => {
   try {
     const { query, market, apiKey } = req.query;
-    
+  
     if (!query || !apiKey) {
       return res.status(400).json({ error: 'Missing required parameters: query and apiKey' });
-    }
-    
+  }
+  
     const normalizedQuery = normalizeSearchQuery(query);
     const cacheType = market === 'crypto' ? 'crypto' : 'stocks';
     

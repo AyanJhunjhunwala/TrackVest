@@ -12,12 +12,12 @@ import { Card, CardContent, CardHeader, CardFooter } from "@/components/ui/card"
 
 export default function SettingsModal({ isOpen, onClose, darkMode }) {
   // Gemini API Key state
-  const [geminiApiKey, setGeminiApiKey] = useState(localStorage.getItem('geminiApiKey') || "AIzaSyDJ7tT1DyZ4FnSWIc4UazjYL4gGCo6vN0Y");
+  const [geminiApiKey, setGeminiApiKey] = useState(localStorage.getItem('geminiApiKey') || '');
   const [isGeminiApiKeyVisible, setIsGeminiApiKeyVisible] = useState(false);
   const [isGeminiKeySaved, setIsGeminiKeySaved] = useState(false);
   
   // Polygon API Key state
-  const [polygonApiKey, setPolygonApiKey] = useState(localStorage.getItem('polygonApiKey') || "9h2tWR97GWuVzS5a27bqgC4JjhC3H1uv");
+  const [polygonApiKey, setPolygonApiKey] = useState(localStorage.getItem('polygonApiKey') || '');
   const [isPolygonKeyVisible, setIsPolygonKeyVisible] = useState(false);
   const [isPolygonKeySaved, setIsPolygonKeySaved] = useState(false);
 
