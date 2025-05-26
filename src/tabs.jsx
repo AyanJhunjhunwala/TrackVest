@@ -133,7 +133,13 @@ export default function OverviewTab({
       )}
 
       {/* Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 sm:gap-6 mb-6" data-tutorial="overview-cards">
+      <div className={`grid grid-cols-1 md:grid-cols-2 ${
+        totalRealEstateEquity > 0 && totalInvestmentCategoriesValue > 0 
+          ? 'lg:grid-cols-5' 
+          : totalRealEstateEquity > 0 || totalInvestmentCategoriesValue > 0 
+            ? 'lg:grid-cols-4' 
+            : 'lg:grid-cols-3'
+      } gap-4 sm:gap-6 mb-6`} data-tutorial="overview-cards">
         {/* Total Portfolio Value Card */}
         <motion.div variants={itemVariants}>
           <Card className={`${darkMode ? 'bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700' : 'bg-gradient-to-br from-white to-slate-50 border-slate-200'} shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105`}>
@@ -182,50 +188,54 @@ export default function OverviewTab({
           </Card>
         </motion.div>
 
-        {/* Real Estate Equity Card */}
-        <motion.div variants={itemVariants}>
-          <Card className={`${darkMode ? 'bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700' : 'bg-gradient-to-br from-white to-slate-50 border-slate-200'} shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105`}>
-            <CardHeader className="pb-2">
-              <CardTitle className={`${darkMode ? 'text-slate-300' : 'text-slate-600'} text-sm font-medium flex items-center gap-2`}>
-                <div className="p-2 rounded-full bg-amber-500/20">
-                  <Home className="h-4 w-4 text-amber-500" />
+        {/* Real Estate Equity Card - Only show if there are real estate holdings */}
+        {totalRealEstateEquity > 0 && (
+          <motion.div variants={itemVariants}>
+            <Card className={`${darkMode ? 'bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700' : 'bg-gradient-to-br from-white to-slate-50 border-slate-200'} shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105`}>
+              <CardHeader className="pb-2">
+                <CardTitle className={`${darkMode ? 'text-slate-300' : 'text-slate-600'} text-sm font-medium flex items-center gap-2`}>
+                  <div className="p-2 rounded-full bg-amber-500/20">
+                    <Home className="h-4 w-4 text-amber-500" />
+                  </div>
+                  Real Estate
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className={`text-2xl sm:text-3xl font-bold ${darkMode ? 'text-slate-50' : 'text-slate-900'}`}>
+                  ${totalRealEstateEquity.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                 </div>
-                Real Estate
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className={`text-2xl sm:text-3xl font-bold ${darkMode ? 'text-slate-50' : 'text-slate-900'}`}>
-                ${totalRealEstateEquity.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-              </div>
-              <div className={`text-xs sm:text-sm mt-2 flex items-center gap-1 text-emerald-400`}>
-                <TrendingUp className="h-3 w-3"/> 3.2%
-                <span className={`${darkMode ? 'text-slate-400' : 'text-slate-500'} ml-1`}>YTD (est.)</span>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
+                <div className={`text-xs sm:text-sm mt-2 flex items-center gap-1 text-emerald-400`}>
+                  <TrendingUp className="h-3 w-3"/> 3.2%
+                  <span className={`${darkMode ? 'text-slate-400' : 'text-slate-500'} ml-1`}>YTD (est.)</span>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
 
-        {/* Alternative Investments Card */}
-        <motion.div variants={itemVariants}>
-          <Card className={`${darkMode ? 'bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700' : 'bg-gradient-to-br from-white to-slate-50 border-slate-200'} shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105`}>
-            <CardHeader className="pb-2">
-              <CardTitle className={`${darkMode ? 'text-slate-300' : 'text-slate-600'} text-sm font-medium flex items-center gap-2`}>
-                <div className="p-2 rounded-full bg-purple-500/20">
-                  <TrendingUp className="h-4 w-4 text-purple-500" />
+        {/* Alternative Investments Card - Only show if there are investment categories */}
+        {totalInvestmentCategoriesValue > 0 && (
+          <motion.div variants={itemVariants}>
+            <Card className={`${darkMode ? 'bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700' : 'bg-gradient-to-br from-white to-slate-50 border-slate-200'} shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105`}>
+              <CardHeader className="pb-2">
+                <CardTitle className={`${darkMode ? 'text-slate-300' : 'text-slate-600'} text-sm font-medium flex items-center gap-2`}>
+                  <div className="p-2 rounded-full bg-purple-500/20">
+                    <TrendingUp className="h-4 w-4 text-purple-500" />
+                  </div>
+                  Alternative Assets
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className={`text-2xl sm:text-3xl font-bold ${darkMode ? 'text-slate-50' : 'text-slate-900'}`}>
+                  ${totalInvestmentCategoriesValue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                 </div>
-                Alternative Assets
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className={`text-2xl sm:text-3xl font-bold ${darkMode ? 'text-slate-50' : 'text-slate-900'}`}>
-                ${totalInvestmentCategoriesValue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-              </div>
-              <div className={`text-xs sm:text-sm mt-2 flex items-center gap-1 text-slate-400`}>
-                <span>{investmentCategories.length} categories</span>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
+                <div className={`text-xs sm:text-sm mt-2 flex items-center gap-1 text-slate-400`}>
+                  <span>{investmentCategories.length} categories</span>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
 
         {/* Portfolio Performance Mini Chart Card */}
         <motion.div variants={itemVariants}>
@@ -382,11 +392,15 @@ export default function OverviewTab({
                         fontSize: '12px',
                         fontWeight: '500'
                       }}
+                      stroke={darkMode ? '#1e293b' : '#f8fafc'}
+                      strokeWidth={2}
                     >
                       {assetAllocation.map((entry, index) => (
                         <Cell 
                           key={`cell-${index}`} 
                           fill={`url(#pie-${pieGradients[index % pieGradients.length].id})`}
+                          stroke={darkMode ? '#1e293b' : '#f8fafc'}
+                          strokeWidth={2}
                         />
                       ))}
                     </Pie>
@@ -414,12 +428,12 @@ export default function OverviewTab({
                         <span className={darkMode ? 'text-slate-300' : 'text-slate-600'}>
                           {item.name}
                         </span>
-                      </div>
+                  </div>
                       <span className={`font-medium ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>
                         {item.value}%
                       </span>
                     </motion.div>
-                  ))}
+                ))}
                 </div>
               </div>
             </CardContent>

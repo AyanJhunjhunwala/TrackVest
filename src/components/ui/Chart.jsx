@@ -52,7 +52,7 @@ export default function Chart({
           <div className="text-4xl mb-2">📊</div>
           <div className="font-medium">No data available</div>
           <div className="text-sm opacity-70">Add some data to see your chart</div>
-        </div>
+      </div>
       </motion.div>
     );
   }
@@ -75,7 +75,7 @@ export default function Chart({
   const renderTitle = title && (
     <div className="flex items-center justify-between mb-4">
       <h3 className={`text-lg font-semibold ${darkMode ? 'text-white' : 'text-slate-800'}`}>
-        {title}
+      {title}
       </h3>
       {trend && (
         <div className={`flex items-center gap-1 text-sm font-medium ${
@@ -333,9 +333,9 @@ export default function Chart({
       
       <div className="w-full">
         <ResponsiveContainer width="100%" height={height}>
-          {renderChart()}
-        </ResponsiveContainer>
-      </div>
+        {renderChart()}
+      </ResponsiveContainer>
+    </div>
     </motion.div>
   );
 } 

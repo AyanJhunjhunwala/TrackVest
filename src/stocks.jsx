@@ -440,15 +440,15 @@ export default function StocksTab({
                           >
                             <td className="px-6 py-4">
                               <div className="flex items-center gap-3">
-                                <img 
-                                  src={position.logoUrl} 
-                                  alt={position.symbol}
+                                  <img 
+                                    src={position.logoUrl} 
+                                    alt={position.symbol}
                                   className="w-10 h-10 rounded-lg object-cover shadow-sm"
-                                  onError={(e) => {
-                                    e.target.onerror = null;
+                                    onError={(e) => {
+                                      e.target.onerror = null;
                                     e.target.src = `https://ui-avatars.com/api/?name=${position.symbol}&background=random&color=fff&size=128`;
-                                  }}
-                                />
+                                    }}
+                                  />
                                 <div>
                                   <div className="flex items-center gap-2">
                                     <span className={`font-semibold ${darkMode ? 'text-white' : 'text-slate-900'}`}>{position.symbol}</span>
@@ -564,15 +564,15 @@ export default function StocksTab({
                           >
                             <td className="px-6 py-4">
                               <div className="flex items-center gap-3">
-                                <img 
-                                  src={position.logoUrl} 
-                                  alt={position.symbol}
+                                  <img 
+                                    src={position.logoUrl} 
+                                    alt={position.symbol}
                                   className="w-10 h-10 rounded-lg object-cover shadow-sm"
-                                  onError={(e) => {
-                                    e.target.onerror = null;
+                                    onError={(e) => {
+                                      e.target.onerror = null;
                                     e.target.src = `https://ui-avatars.com/api/?name=${position.symbol}&background=random&color=fff&size=128`;
                                   }}
-                                />
+                                  />
                                 <div>
                                   <div className="flex items-center gap-2">
                                     <span className={`font-semibold ${darkMode ? 'text-white' : 'text-slate-900'}`}>{position.symbol}</span>

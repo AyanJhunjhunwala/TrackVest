@@ -6,7 +6,7 @@ import {
   getStockLogo, 
   getCryptoLogo, 
   debounce, 
-  getApiDate, 
+  getApiDateSync, 
   fetchDailyMarketData 
 } from "../hooks";
 
@@ -175,7 +175,7 @@ export default function SearchBar({
       
       // Get market data from the grouped endpoint (uses cache if available)
       const marketData = await fetchDailyMarketData(POLYGON_API_KEY);
-      const date = getApiDate();
+      const date = getApiDateSync();
       
       // Update prices from cache first
       stocksToFetch.forEach(stock => {
@@ -372,7 +372,7 @@ export default function SearchBar({
       
       // Get market data (updates the cache if not already populated)
       const marketData = await fetchDailyMarketData(POLYGON_API_KEY);
-      const date = getApiDate();
+      const date = getApiDateSync();
       
       // Check which cryptos we already have cached
       cryptosToFetch.forEach(crypto => {

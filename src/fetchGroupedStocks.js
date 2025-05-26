@@ -5,7 +5,7 @@
  * grouped stock data from the Polygon API
  */
 
-import { getApiDate, formatMarketDate } from './hooks';
+import { getApiDateSync, formatMarketDate } from './hooks';
 
 // API Configuration
 const getPolygonApiKey = () => localStorage.getItem('polygonApiKey') || '';
@@ -18,7 +18,7 @@ const getPolygonApiKey = () => localStorage.getItem('polygonApiKey') || '';
  */
 export async function fetchGroupedStockData(date = null, symbols = []) {
   // If no date provided, use the most recent market day
-  const targetDate = date || getApiDate();
+  const targetDate = date || getApiDateSync();
   const displayDate = formatMarketDate(targetDate);
   
   try {

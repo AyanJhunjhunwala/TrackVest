@@ -18,12 +18,14 @@ import InsightsTab from './insights';
 import GeminiChat from './GeminiChat';
 import SettingsModal from './components/SettingsModal';
 import TutorialSystem from './components/TutorialSystem';
+import MobileNotSupported from './components/MobileNotSupported';
 
 // Import utility functions
 import { 
   fetchStockPrice, 
   fetchCryptoPrice
 } from './hooks';
+import useMobileDetection from './hooks/useMobileDetection';
 
 // Investment Category Modal Component
 const InvestmentCategoryModal = ({ isOpen, onClose, darkMode, onCreateCategory }) => {
@@ -940,6 +942,9 @@ const OnboardingModal = ({ isOpen, onClose, darkMode, currentStep, onNext, onPre
 };
 
 export default function TrackVestApp() {
+  // Mobile detection
+  const isMobile = useMobileDetection();
+  
   // State for API key
   const [apiKey] = useState(() => localStorage.getItem('polygonApiKey') || '');
   const [showApiInput, setShowApiInput] = useState(false);
@@ -1725,6 +1730,11 @@ export default function TrackVestApp() {
       polygon: !!(polygonKey && polygonKey.trim() && polygonKey.length > 10)
     });
   }, [showSettings]); // Re-check when settings modal closes
+
+  // Show mobile not supported screen if on mobile
+  if (isMobile) {
+    return <MobileNotSupported />;
+  }
 
   return (
     <div className={`flex flex-col min-h-screen ${darkMode ? 'bg-slate-950 text-white' : 'bg-slate-50 text-slate-800'}`}>

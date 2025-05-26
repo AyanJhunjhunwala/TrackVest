@@ -22,148 +22,93 @@ export function useDebounce(callback, delay) {
     return debouncedFn;
 }
 
-// Helper function to get a suitable date for API calls (always previous trading day)
-export const getApiDate = () => {
+// Function to get the 2nd last US market day using Gemini API
+const getSecondLastMarketDay = async () => {
+    try {
+        const geminiApiKey = localStorage.getItem('geminiApiKey');
+        if (!geminiApiKey || geminiApiKey.trim().length < 10) {
+            console.warn('No Gemini API key found, using fallback date calculation');
+            return getFallbackSecondLastMarketDay();
+        }
+
+        const { GoogleGenerativeAI } = await import("@google/generative-ai");
+        const genAI = new GoogleGenerativeAI(geminiApiKey);
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-preview-05-20" });
+
+        const today = new Date();
+        const prompt = `
+            What was the 2nd last US stock market trading day before today (${today.toISOString().split('T')[0]})?
+            
+            Consider:
+            - US stock market is closed on weekends (Saturday and Sunday)
+            - US stock market holidays (New Year's Day, MLK Day, Presidents Day, Good Friday, Memorial Day, Juneteenth, Independence Day, Labor Day, Thanksgiving, Christmas, etc.)
+            - I need the 2nd most recent trading day, not the most recent
+            
+            Please respond with ONLY the date in YYYY-MM-DD format, nothing else.
+            
+            For example, if today is Friday and yesterday (Thursday) was the last trading day, I want Wednesday's date.
+            If today is Monday and Friday was the last trading day, I want Thursday's date.
+        `;
+
+        const result = await model.generateContent(prompt);
+        const response = result.response.text().trim();
+        
+        // Validate the response format (YYYY-MM-DD)
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (dateRegex.test(response)) {
+            console.log(`Gemini API returned 2nd last market day: ${response}`);
+            return response;
+        } else {
+            console.warn('Invalid date format from Gemini API, using fallback');
+            return getFallbackSecondLastMarketDay();
+        }
+    } catch (error) {
+        console.error('Error getting market day from Gemini API:', error);
+        return getFallbackSecondLastMarketDay();
+    }
+};
+
+// Fallback function for when Gemini API is not available
+const getFallbackSecondLastMarketDay = () => {
     const today = new Date();
     
     // Function to check if a date is a US market holiday
     const isMarketHoliday = (date) => {
         const year = date.getFullYear();
-        const month = date.getMonth(); // 0-indexed (0 = January)
-        const day = date.getDate();
-        
-        // Create YYYY-MM-DD format for easier comparison
         const dateString = date.toISOString().split('T')[0];
         
-        // TEMPORARY FIX: Hard-code specific May 2025 dates as market holidays
-        if (dateString === '2025-05-10') {
-            console.log('May 10, 2025 is detected as a market holiday');
-            return true;
-        }
-        if (dateString === '2025-05-16') {
-            console.log('May 16, 2025 is detected as a market holiday');
-            return true;
-        }
+        // Common US market holidays for 2025
+        const holidays2025 = [
+            '2025-01-01', // New Year's Day
+            '2025-01-20', // MLK Day (3rd Monday in January)
+            '2025-02-17', // Presidents Day (3rd Monday in February)
+            '2025-04-18', // Good Friday
+            '2025-05-26', // Memorial Day (last Monday in May)
+            '2025-06-19', // Juneteenth
+            '2025-07-04', // Independence Day
+            '2025-09-01', // Labor Day (1st Monday in September)
+            '2025-11-27', // Thanksgiving (4th Thursday in November)
+            '2025-12-25'  // Christmas
+        ];
         
-        // Common US market holidays - some are on fixed dates, others are on specific day of week
-        
-        // New Year's Day - If on weekend, closed on nearest weekday
-        const newYearsDay = new Date(year, 0, 1); // January 1
-        if (newYearsDay.getDay() === 0) { // If Sunday, observed Monday
-            if (dateString === new Date(year, 0, 2).toISOString().split('T')[0]) return true;
-        } else if (newYearsDay.getDay() === 6) { // If Saturday, observed Friday
-            if (dateString === new Date(year, 0, 0).toISOString().split('T')[0]) return true;
-        } else if (dateString === newYearsDay.toISOString().split('T')[0]) return true;
-        
-        // Martin Luther King Jr. Day - Third Monday in January
-        const mlkDay = new Date(year, 0, 1);
-        mlkDay.setDate(1 + (15 + (1 - mlkDay.getDay())) % 7 + 14); // Find third Monday
-        if (dateString === mlkDay.toISOString().split('T')[0]) return true;
-        
-        // Presidents Day - Third Monday in February
-        const presidentsDay = new Date(year, 1, 1);
-        presidentsDay.setDate(1 + (15 + (1 - presidentsDay.getDay())) % 7 + 14); // Find third Monday
-        if (dateString === presidentsDay.toISOString().split('T')[0]) return true;
-        
-        // Good Friday - Varies by year (would require complex calculation or lookup)
-        // Simplified check for common dates in March/April
-        
-        // Memorial Day - Last Monday in May
-        const memorialDay = new Date(year, 5, 0);
-        const lastDayMay = memorialDay.getDate();
-        memorialDay.setDate(lastDayMay - (memorialDay.getDay() === 1 ? 7 : (memorialDay.getDay() + 6) % 7));
-        if (dateString === memorialDay.toISOString().split('T')[0]) return true;
-        
-        // Juneteenth - June 19, or nearest weekday if weekend
-        const juneteenth = new Date(year, 5, 19); // June 19
-        if (juneteenth.getDay() === 0) { // If Sunday, observed Monday
-            if (dateString === new Date(year, 5, 20).toISOString().split('T')[0]) return true;
-        } else if (juneteenth.getDay() === 6) { // If Saturday, observed Friday
-            if (dateString === new Date(year, 5, 18).toISOString().split('T')[0]) return true;
-        } else if (dateString === juneteenth.toISOString().split('T')[0]) return true;
-        
-        // Independence Day - July 4, or nearest weekday if weekend
-        const independenceDay = new Date(year, 6, 4); // July 4
-        if (independenceDay.getDay() === 0) { // If Sunday, observed Monday
-            if (dateString === new Date(year, 6, 5).toISOString().split('T')[0]) return true;
-        } else if (independenceDay.getDay() === 6) { // If Saturday, observed Friday
-            if (dateString === new Date(year, 6, 3).toISOString().split('T')[0]) return true;
-        } else if (dateString === independenceDay.toISOString().split('T')[0]) return true;
-        
-        // Labor Day - First Monday in September
-        const laborDay = new Date(year, 8, 1);
-        laborDay.setDate(1 + (8 - laborDay.getDay()) % 7); // Find first Monday
-        if (dateString === laborDay.toISOString().split('T')[0]) return true;
-        
-        // Indigenous Peoples' Day/Columbus Day - Second Monday in October
-        const columbusDay = new Date(year, 9, 1);
-        columbusDay.setDate(1 + (8 - columbusDay.getDay()) % 7 + 7); // Find second Monday
-        if (dateString === columbusDay.toISOString().split('T')[0]) return true;
-        
-        // Veterans Day - November 11, or nearest weekday if weekend
-        const veteransDay = new Date(year, 10, 11); // November 11
-        if (veteransDay.getDay() === 0) { // If Sunday, observed Monday
-            if (dateString === new Date(year, 10, 12).toISOString().split('T')[0]) return true;
-        } else if (veteransDay.getDay() === 6) { // If Saturday, observed Friday
-            if (dateString === new Date(year, 10, 10).toISOString().split('T')[0]) return true;
-        } else if (dateString === veteransDay.toISOString().split('T')[0]) return true;
-        
-        // Thanksgiving Day - Fourth Thursday in November
-        const thanksgiving = new Date(year, 10, 1);
-        thanksgiving.setDate(1 + (11 - thanksgiving.getDay()) % 7 + 21); // Find fourth Thursday
-        if (dateString === thanksgiving.toISOString().split('T')[0]) return true;
-        
-        // Christmas - December 25, or nearest weekday if weekend
-        const christmas = new Date(year, 11, 25); // December 25
-        if (christmas.getDay() === 0) { // If Sunday, observed Monday
-            if (dateString === new Date(year, 11, 26).toISOString().split('T')[0]) return true;
-        } else if (christmas.getDay() === 6) { // If Saturday, observed Friday
-            if (dateString === new Date(year, 11, 24).toISOString().split('T')[0]) return true;
-        } else if (dateString === christmas.toISOString().split('T')[0]) return true;
-        
-        // Add other market holidays as needed
-        
-        return false;
+        return holidays2025.includes(dateString);
     };
     
-    // TEMPORARY FIX - Check if we're currently in May 2025 with the known market holiday issue
-    const currentMonth = today.getMonth();
-    const currentYear = today.getFullYear();
-    const currentDay = today.getDate();
-    
-    // If we're in May 2025, and it's the 10th, 11th, 16th or 17th, use May 9th or 15th as the last valid trading day
-    if (currentYear === 2025 && currentMonth === 4) {
-        if (currentDay === 10 || currentDay === 11) {
-            console.log('Special case: Using May 9th, 2025 as the most recent trading day');
-            return '2025-05-09';
-        } else if (currentDay === 16 || currentDay === 17) {
-            console.log('Special case: Using May 15th, 2025 as the most recent trading day');
-            return '2025-05-15';
-        }
-    }
-    
-    // Find the 2nd most recent valid trading day (updated to get 2nd last market day)
+    // Find the 2nd most recent valid trading day
     let marketDays = [];
     let daysToSubtract = 1;
-    let maxAttempts = 20; // Increased safety limit to ensure we find 2 market days
+    let maxAttempts = 20;
     
     while (marketDays.length < 2 && maxAttempts > 0) {
         const checkDay = new Date(today);
         checkDay.setDate(today.getDate() - daysToSubtract);
         
         const dayOfWeek = checkDay.getDay();
-        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6; // 0 = Sunday, 6 = Saturday
+        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
         const isHoliday = isMarketHoliday(checkDay);
-        
-        if (isWeekend) {
-            console.log(`Skipping ${checkDay.toISOString().split('T')[0]} - Weekend (${dayOfWeek === 0 ? 'Sunday' : 'Saturday'})`);
-        } else if (isHoliday) {
-            console.log(`Skipping ${checkDay.toISOString().split('T')[0]} - Market Holiday`);
-        }
         
         if (!isWeekend && !isHoliday) {
             const marketDay = checkDay.toISOString().split('T')[0];
-            console.log(`Found market day: ${marketDay}`);
             marketDays.push(marketDay);
         }
         
@@ -171,26 +116,50 @@ export const getApiDate = () => {
         maxAttempts--;
     }
     
-    // Fallback to a known good market day if we couldn't find enough valid trading days
-    if (marketDays.length < 2) {
-        // Check if we're in May 2025 with specific dates
-        if (currentYear === 2025 && currentMonth === 4) {
-            if (currentDay >= 16) {
-                console.warn('Could not find 2nd last market day, defaulting to May 14th, 2025');
-                return '2025-05-14';
-            } else {
-                console.warn('Could not find 2nd last market day, defaulting to May 8th, 2025');
-                return '2025-05-08';
-            }
-        } else {
-            console.warn('Could not find 2nd last market day, defaulting to May 8th, 2025');
-            return '2025-05-08';
+    // Return the 2nd last market day, or fallback to a safe date
+    if (marketDays.length >= 2) {
+        console.log(`Fallback: Using 2nd last market day: ${marketDays[1]}`);
+        return marketDays[1];
+    } else {
+        const fallbackDate = '2025-01-08'; // Known safe trading day
+        console.warn(`Could not find 2nd last market day, using fallback: ${fallbackDate}`);
+        return fallbackDate;
+    }
+};
+
+// Helper function to get a suitable date for API calls (2nd last trading day)
+export const getApiDate = async () => {
+    try {
+        return await getSecondLastMarketDay();
+    } catch (error) {
+        console.error('Error getting API date:', error);
+        return getFallbackSecondLastMarketDay();
+    }
+};
+
+// Synchronous version for immediate use (uses cached result or fallback)
+export const getApiDateSync = () => {
+    // Check if we have a cached result from recent async call
+    const cachedDate = localStorage.getItem('lastMarketDate');
+    const cachedTime = localStorage.getItem('lastMarketDateTime');
+    
+    if (cachedDate && cachedTime) {
+        const cacheAge = Date.now() - parseInt(cachedTime);
+        // Use cached date if it's less than 1 hour old
+        if (cacheAge < 60 * 60 * 1000) {
+            console.log(`Using cached market date: ${cachedDate}`);
+            return cachedDate;
         }
     }
     
-    // Return the 2nd last market day
-    console.log(`Using 2nd last market day: ${marketDays[1]}`);
-    return marketDays[1];
+    // If no valid cache, use fallback
+    const fallbackDate = getFallbackSecondLastMarketDay();
+    
+    // Cache the fallback date
+    localStorage.setItem('lastMarketDate', fallbackDate);
+    localStorage.setItem('lastMarketDateTime', Date.now().toString());
+    
+    return fallbackDate;
 };
 
 // Helper function to format date for display
@@ -218,19 +187,13 @@ export const fetchDailyMarketData = async (apiKey) => {
     const key = apiKey || getPolygonApiKey();
     if (!key) throw new Error("API key not set.");
     
-    // Get previous valid market day
-    const date = getApiDate();
+    // Get previous valid market day (2nd last trading day)
+    const date = await getApiDate();
     const formattedDate = formatMarketDate(date);
     
-    // TEMPORARY FIX: If we're getting specific dates in May 2025, use appropriate fallbacks
-    if (date === '2025-05-10' || date === '2025-05-11') {
-        console.log('Overriding date to use May 9th, 2025');
-        return fetchSpecificDateData('2025-05-09', key);
-    }
-    if (date === '2025-05-16' || date === '2025-05-17') {
-        console.log('Overriding date to use May 15th, 2025');
-        return fetchSpecificDateData('2025-05-15', key);
-    }
+    // Cache the date for sync access
+    localStorage.setItem('lastMarketDate', date);
+    localStorage.setItem('lastMarketDateTime', Date.now().toString());
     
     // If we already have data for this date in cache, return it
     if (marketDataCache.date === date && Object.keys(marketDataCache.stocks).length > 0) {
@@ -292,16 +255,12 @@ export const fetchDailyMarketData = async (apiKey) => {
             const cryptoData = await cryptoResponse.json();
             
             if (cryptoData.status === "OK" && cryptoData.results) {
-                // Map crypto results to cache by ticker symbol (removing X: prefix if present)
+                // Map crypto results to cache by ticker symbol
                 cryptoData.results.forEach(crypto => {
-                    // Extract the crypto symbol - format is usually "X:BTCUSD" or similar
-                    let symbol = crypto.T;
-                    if (symbol.startsWith("X:") && symbol.endsWith("USD")) {
-                        symbol = symbol.substring(2, symbol.length - 3); // Remove X: prefix and USD suffix
-                    }
-                    
-                    marketDataCache.crypto[symbol] = {
-                        symbol: symbol,
+                    // Remove the "X:" prefix from crypto symbols for easier lookup
+                    const cleanSymbol = crypto.T.replace('X:', '').replace('USD', '');
+                    marketDataCache.crypto[cleanSymbol] = {
+                        symbol: cleanSymbol,
                         close: crypto.c,
                         open: crypto.o,
                         high: crypto.h,
@@ -311,40 +270,17 @@ export const fetchDailyMarketData = async (apiKey) => {
                     };
                 });
                 
-                console.log(`Cached ${Object.keys(marketDataCache.crypto).length} cryptocurrencies for ${date} (${formattedDate})`);
+                console.log(`Cached ${Object.keys(marketDataCache.crypto).length} crypto assets for ${date} (${formattedDate})`);
             } else {
-                console.warn(`No crypto market data available for ${formattedDate}`);
+                console.warn(`No crypto data available for ${date} (${formattedDate})`);
             }
         } else {
-            console.warn(`Failed to fetch crypto market data: ${cryptoResponse.status} ${cryptoResponse.statusText}`);
+            console.warn(`Failed to fetch crypto data for ${date}: ${cryptoResponse.status}`);
         }
         
         return marketDataCache;
     } catch (error) {
-        console.error(`Error fetching daily market data for ${date} (${formattedDate}):`, error);
-        
-        // TEMPORARY FIX: Use appropriate fallbacks for error conditions
-        if (date === '2025-05-16' || date === '2025-05-17') {
-            console.warn(`Falling back to May 15th, 2025 data due to error with ${date}`);
-            return fetchSpecificDateData('2025-05-15', key);
-        } else if (date !== '2025-05-09' && date !== '2025-05-15') {
-            console.warn(`Falling back to market data from a known good date (May 9th, 2025) due to error with ${date}`);
-            return fetchSpecificDateData('2025-05-09', key);
-        }
-        
-        // If the error is related to market closure, provide a clearer message
-        if (error.message.includes("market holiday") || error.message.includes("no data") || error.message.includes("weekend")) {
-            // Create an empty cache entry to avoid hammering the API with requests for closed days
-            marketDataCache = {
-                date,
-                stocks: {},
-                crypto: {}
-            };
-            
-            console.warn(`Markets were closed on ${formattedDate}. Using empty dataset.`);
-            return marketDataCache;
-        }
-        
+        console.error(`Error fetching market data for ${date}:`, error);
         throw error;
     }
 };
@@ -400,14 +336,10 @@ async function fetchSpecificDateData(specificDate, apiKey) {
             if (cryptoData.status === "OK" && cryptoData.results) {
                 // Map crypto results to cache by ticker symbol
                 cryptoData.results.forEach(crypto => {
-                    // Extract the crypto symbol - format is usually "X:BTCUSD" or similar
-                    let symbol = crypto.T;
-                    if (symbol.startsWith("X:") && symbol.endsWith("USD")) {
-                        symbol = symbol.substring(2, symbol.length - 3); // Remove X: prefix and USD suffix
-                    }
-                    
-                    marketDataCache.crypto[symbol] = {
-                        symbol: symbol,
+                    // Remove the "X:" prefix from crypto symbols for easier lookup
+                    const cleanSymbol = crypto.T.replace('X:', '').replace('USD', '');
+                    marketDataCache.crypto[cleanSymbol] = {
+                        symbol: cleanSymbol,
                         close: crypto.c,
                         open: crypto.o,
                         high: crypto.h,
@@ -417,24 +349,14 @@ async function fetchSpecificDateData(specificDate, apiKey) {
                     };
                 });
                 
-                console.log(`Cached ${Object.keys(marketDataCache.crypto).length} cryptocurrencies for fallback date ${specificDate}`);
-            } else {
-                console.warn(`No crypto data for fallback date ${specificDate}`);
+                console.log(`Cached ${Object.keys(marketDataCache.crypto).length} crypto assets for fallback date ${specificDate}`);
             }
         }
         
         return marketDataCache;
     } catch (error) {
-        console.error(`Error fetching fallback data for ${specificDate}:`, error);
-        
-        // Last resort - return empty cache
-        marketDataCache = {
-            date: specificDate,
-            stocks: {},
-            crypto: {}
-        };
-        
-        return marketDataCache;
+        console.error(`Error fetching data for fallback date ${specificDate}:`, error);
+        throw error;
     }
 }
 
@@ -449,7 +371,7 @@ export const fetchStockPrice = async (symbol, apiKey) => {
         await fetchDailyMarketData(key);
         
         // Get API date (for log messages)
-        const date = getApiDate();
+        const date = await getApiDate();
         const formattedDate = formatMarketDate(date);
         
         // Convert symbol to uppercase to match cache keys
@@ -468,48 +390,16 @@ export const fetchStockPrice = async (symbol, apiKey) => {
         const response = await fetch(url);
         
         if (!response.ok) {
-            // If individual API call fails, return a simulated price instead of throwing an error
-            console.warn(`Individual API call failed for ${upperSymbol}: ${response.status}`);
-            
-            const simulatedPrice = Math.floor(Math.random() * 300) + 50;
-            console.log(`Using simulated price for ${upperSymbol}: $${simulatedPrice}`);
-            
-            // Add simulated data to cache to avoid repeated failed API calls
-            marketDataCache.stocks[upperSymbol] = {
-                symbol: upperSymbol,
-                close: simulatedPrice,
-                open: simulatedPrice * 0.98,
-                high: simulatedPrice * 1.02,
-                low: simulatedPrice * 0.97,
-                simulated: true
-            };
-            
-            return simulatedPrice;
+            throw new Error(`Network error (${response.status}): ${response.statusText}`);
         }
         
         const data = await response.json();
         
         if (data.status !== "OK") {
-            // If data status is not OK, return a simulated price
-            console.warn(`No price data available for ${upperSymbol} on ${formattedDate}`);
-            
-            const simulatedPrice = Math.floor(Math.random() * 300) + 50;
-            console.log(`Using simulated price for ${upperSymbol}: $${simulatedPrice}`);
-            
-            // Add simulated data to cache
-            marketDataCache.stocks[upperSymbol] = {
-                symbol: upperSymbol,
-                close: simulatedPrice,
-                open: simulatedPrice * 0.98,
-                high: simulatedPrice * 1.02,
-                low: simulatedPrice * 0.97,
-                simulated: true
-            };
-            
-            return simulatedPrice;
+            throw new Error(`API error: ${data.status}`);
         }
         
-        // Add to cache for future requests
+        // Cache the individual result for future use
         marketDataCache.stocks[upperSymbol] = {
             symbol: upperSymbol,
             close: data.close,
@@ -518,26 +408,11 @@ export const fetchStockPrice = async (symbol, apiKey) => {
             low: data.low
         };
         
-        // Return the closing price
+        console.log(`Fetched and cached individual price for ${upperSymbol}: $${data.close}`);
         return data.close;
     } catch (error) {
         console.error(`Error fetching stock price for ${symbol}:`, error);
-        
-        // Generate a simulated price rather than throwing an error
-        const simulatedPrice = Math.floor(Math.random() * 300) + 50;
-        console.log(`Using simulated price due to error for ${symbol}: $${simulatedPrice}`);
-        
-        // Add simulated data to cache
-        marketDataCache.stocks[symbol.toUpperCase()] = {
-            symbol: symbol.toUpperCase(),
-            close: simulatedPrice,
-            open: simulatedPrice * 0.98,
-            high: simulatedPrice * 1.02,
-            low: simulatedPrice * 0.97,
-            simulated: true
-        };
-        
-        return simulatedPrice;
+        throw error;
     }
 };
 
@@ -554,7 +429,7 @@ export const fetchCryptoPrice = async (symbol, apiKey) => {
         await fetchDailyMarketData(key);
         
         // Get API date (for log messages)
-        const date = getApiDate();
+        const date = await getApiDate();
         const formattedDate = formatMarketDate(date);
         
         // Check if we already have this crypto in our cache
@@ -571,48 +446,16 @@ export const fetchCryptoPrice = async (symbol, apiKey) => {
         const response = await fetch(url);
         
         if (!response.ok) {
-            // If individual API call fails, return a simulated price instead of throwing an error
-            console.warn(`Individual API call failed for ${upperSymbol}: ${response.status}`);
-            
-            const simulatedPrice = Math.floor(Math.random() * 5000) + 100;
-            console.log(`Using simulated price for ${upperSymbol}: $${simulatedPrice}`);
-            
-            // Add simulated data to cache to avoid repeated failed API calls
-            marketDataCache.crypto[upperSymbol] = {
-                symbol: upperSymbol,
-                close: simulatedPrice,
-                open: simulatedPrice * 0.98,
-                high: simulatedPrice * 1.02,
-                low: simulatedPrice * 0.97,
-                simulated: true
-            };
-            
-            return simulatedPrice;
+            throw new Error(`Network error (${response.status}): ${response.statusText}`);
         }
         
         const data = await response.json();
         
         if (data.status !== "OK") {
-            // If data status is not OK, return a simulated price
-            console.warn(`No price data available for ${upperSymbol} on ${formattedDate}`);
-            
-            const simulatedPrice = Math.floor(Math.random() * 5000) + 100;
-            console.log(`Using simulated price for ${upperSymbol}: $${simulatedPrice}`);
-            
-            // Add simulated data to cache
-            marketDataCache.crypto[upperSymbol] = {
-                symbol: upperSymbol,
-                close: simulatedPrice,
-                open: simulatedPrice * 0.98,
-                high: simulatedPrice * 1.02,
-                low: simulatedPrice * 0.97,
-                simulated: true
-            };
-            
-            return simulatedPrice;
+            throw new Error(`API error: ${data.status}`);
         }
         
-        // Add to cache for future requests
+        // Cache the individual result for future use
         marketDataCache.crypto[upperSymbol] = {
             symbol: upperSymbol,
             close: data.close,
@@ -621,26 +464,11 @@ export const fetchCryptoPrice = async (symbol, apiKey) => {
             low: data.low
         };
         
-        // Return the closing price
+        console.log(`Fetched and cached individual price for ${upperSymbol}: $${data.close}`);
         return data.close;
     } catch (error) {
         console.error(`Error fetching crypto price for ${symbol}:`, error);
-        
-        // Generate a simulated price rather than throwing an error
-        const simulatedPrice = Math.floor(Math.random() * 5000) + 100;
-        console.log(`Using simulated price due to error for ${symbol}: $${simulatedPrice}`);
-        
-        // Add simulated data to cache
-        marketDataCache.crypto[symbol.toUpperCase()] = {
-            symbol: symbol.toUpperCase(),
-            close: simulatedPrice,
-            open: simulatedPrice * 0.98,
-            high: simulatedPrice * 1.02,
-            low: simulatedPrice * 0.97,
-            simulated: true
-        };
-        
-        return simulatedPrice;
+        throw error;
     }
 };
 

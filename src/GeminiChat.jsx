@@ -245,11 +245,11 @@ const fetchPopularStocks = async () => {
     }
     
     // Use our fetchGroupedStockData function to get data for all stocks at once
-    const { getApiDate } = await import('./hooks');
+    const { getApiDateSync } = await import('./hooks');
     const { fetchGroupedStockData } = await import('./fetchGroupedStocks');
     
     // Get the most recent market day
-    const date = getApiDate();
+    const date = getApiDateSync();
     console.log(`Fetching popular stocks data for ${date}`);
     
     // Fetch data for popular tickers
