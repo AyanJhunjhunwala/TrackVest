@@ -1,23 +1,31 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { RefreshCcw, Loader2, AlertCircle, Sun, Moon, Settings } from 'lucide-react';
+import { RefreshCcw, Loader2, AlertCircle, Sun, Moon, Settings, Info } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function Header({ 
   darkMode, 
   setDarkMode, 
-  showApiInput, 
-  setShowApiInput, 
   refreshData, 
   isLoading, 
   refreshApiError,
-  setShowSettings 
+  setShowSettings,
+  onShowAbout
 }) {
   // Logo component
   const Logo = () => (
     <div className="flex items-center gap-2">
       <img src="/src/trackvest.png" alt="TrackVest Logo" className="w-8 h-8" onError={(e) => { e.target.style.display = 'none'; }} />
       <span className="text-xl sm:text-2xl font-bold tracking-tighter">TrackVest</span>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={onShowAbout}
+        className="ml-2 w-8 h-8 p-0 rounded-full opacity-70 hover:opacity-100 transition-opacity"
+        title="About TrackVest"
+      >
+        <Info className={`h-4 w-4 ${darkMode ? 'text-slate-300' : 'text-slate-600'}`} />
+      </Button>
     </div>
   );
 
@@ -56,9 +64,10 @@ export default function Header({
           <Button
             variant="default"
             size="sm"
-            className={`gap-1 px-2 sm:px-3 sm:gap-2 ${darkMode ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-emerald-600 hover:bg-emerald-700 text-white'}`}
+            className={`gap-1 px-2 sm:px-3 sm:gap-2 ${darkMode ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-emerald-600 hover:bg-emerald-700 text-white'} transition-all duration-200 hover:scale-105 hover:shadow-lg`}
             onClick={refreshData}
             disabled={isLoading}
+            data-tutorial="refresh-button"
           >
             {isLoading ? (
               <Loader2 className="h-4 w-4 animate-spin" />

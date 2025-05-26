@@ -17,15 +17,12 @@ import RealEstateTab from './realestate';
 import InsightsTab from './insights';
 import GeminiChat from './GeminiChat';
 import SettingsModal from './components/SettingsModal';
+import TutorialSystem from './components/TutorialSystem';
 
 // Import utility functions
 import { 
-  debounce, 
   fetchStockPrice, 
-  fetchCryptoPrice, 
-  getStockLogo, 
-  getCryptoLogo,
-  getApiDate
+  fetchCryptoPrice
 } from './hooks';
 
 // Investment Category Modal Component
@@ -174,86 +171,168 @@ const InvestmentCategoryModal = ({ isOpen, onClose, darkMode, onCreateCategory }
       
       const response = result.response.text();
       
-      // Parse the JSON response
-      try {
-        const categoryData = JSON.parse(response);
-        setGeneratedContent(categoryData);
-      } catch (parseError) {
-        console.error('Error parsing AI response:', parseError);
-        // Intelligent fallback category structure based on input
-        const isVintageCar = investmentDescription.toLowerCase().includes('car') || investmentDescription.toLowerCase().includes('vintage');
-        const isRealEstate = investmentDescription.toLowerCase().includes('property') || investmentDescription.toLowerCase().includes('real estate');
-        const isCrypto = investmentDescription.toLowerCase().includes('crypto') || investmentDescription.toLowerCase().includes('bitcoin');
-        const isStock = investmentDescription.toLowerCase().includes('stock') || investmentDescription.toLowerCase().includes('equity');
+      // Clean the response to handle markdown code blocks and other formatting
+      let cleanedResponse = response.trim();
+      
+      // Remove markdown code blocks if present
+      if (cleanedResponse.startsWith('```json')) {
+        cleanedResponse = cleanedResponse.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+      } else if (cleanedResponse.startsWith('```')) {
+        cleanedResponse = cleanedResponse.replace(/^```\s*/, '').replace(/\s*```$/, '');
+      }
+      
+      // Remove any leading/trailing whitespace and newlines
+      cleanedResponse = cleanedResponse.trim();
+      
+      // Find JSON object boundaries if there's extra text
+      const jsonStart = cleanedResponse.indexOf('{');
+      let jsonEnd = cleanedResponse.lastIndexOf('}');
+      
+      if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+        cleanedResponse = cleanedResponse.substring(jsonStart, jsonEnd + 1);
         
-        let intelligentFallback;
+        // Validate bracket matching
+        let bracketCount = 0;
+        let validEnd = -1;
         
-        if (isVintageCar) {
-          intelligentFallback = {
-            name: 'Vintage Car Investment',
-            description: `Investment in vintage automobiles with estimated appreciation of 2% annually. Based on description: ${investmentDescription}`,
-            riskLevel: "Medium",
-            expectedReturn: "2-4%",
-            timeHorizon: "Long-term",
-            keyMetrics: ["Appreciation Rate", "Condition Score", "Rarity Index", "Market Demand", "Maintenance Costs"],
-            recommendedAssets: [
-              {
-                symbol: "VINTAGE_AUTO",
-                name: "Classic Automobile Collection",
-                allocation: "100%",
-                rationale: "Direct investment in appreciating vintage vehicle",
-                currentPrice: dollarAmount || "40000",
-                marketCap: "Collectible Auto Market"
-              }
-            ],
-            riskFactors: ["Market volatility", "Maintenance costs", "Storage requirements", "Insurance costs", "Liquidity constraints"],
-            marketTrends: "Vintage car market showing steady appreciation, particularly for well-maintained classics",
-            investmentStrategy: "Buy and hold strategy with proper maintenance and storage",
-            rebalancingFrequency: "Annual assessment",
-            taxConsiderations: "Capital gains tax on appreciation, potential collectible tax rates",
-            specificMetrics: {
-              appreciationRate: "2% annually",
-              volatility: "15-25%",
-              liquidityScore: "4/10",
-              marketSize: "Niche collectible market"
+        for (let i = 0; i < cleanedResponse.length; i++) {
+          if (cleanedResponse[i] === '{') {
+            bracketCount++;
+          } else if (cleanedResponse[i] === '}') {
+            bracketCount--;
+            if (bracketCount === 0) {
+              validEnd = i;
+              break;
             }
-          };
-        } else if (isRealEstate) {
-          intelligentFallback = {
-            name: 'Real Estate Investment',
-            description: `Real estate investment opportunity. ${investmentDescription}`,
-            riskLevel: "Medium",
-            expectedReturn: "6-12%",
-            timeHorizon: "Long-term",
-            keyMetrics: ["Cap Rate", "Cash Flow", "Appreciation", "Occupancy Rate", "NOI"],
-            recommendedAssets: [],
-            riskFactors: ["Market cycles", "Interest rate changes", "Property management"],
-            marketTrends: "Real estate market analysis based on location and property type",
-            investmentStrategy: "Location-based buy and hold strategy",
-            rebalancingFrequency: "Annual",
-            taxConsiderations: "Depreciation benefits, 1031 exchanges, capital gains"
-          };
-        } else {
-          intelligentFallback = {
-            name: activeTab === 'quick' ? categoryName : 'Custom Investment Category',
-            description: activeTab === 'quick' ? `Investment category for ${categoryName}` : investmentDescription,
-            riskLevel: "Medium",
-            expectedReturn: "6-10%",
-            timeHorizon: "Medium-term",
-            keyMetrics: ["ROI", "Volatility", "Sharpe Ratio", "Beta", "Alpha"],
-            recommendedAssets: [],
-            riskFactors: ["Market volatility", "Economic conditions", "Sector-specific risks"],
-            marketTrends: "Market analysis based on investment type",
-            investmentStrategy: "Diversified approach with risk management",
-            rebalancingFrequency: "Quarterly",
-            taxConsiderations: "Standard investment tax implications"
-          };
+          }
         }
         
-        setGeneratedContent({
-          ...intelligentFallback,
-          estimatedAmount: dollarAmount || 'Not specified'
-        });
+        if (validEnd !== -1) {
+          cleanedResponse = cleanedResponse.substring(0, validEnd + 1);
+        }
+      }
+      
+      // Parse the JSON response
+      try {
+        const categoryData = JSON.parse(cleanedResponse);
+        
+        // Validate that we have the required fields
+        if (categoryData && typeof categoryData === 'object' && categoryData.name) {
+          setGeneratedContent(categoryData);
+        } else {
+          throw new Error('Invalid category data structure');
+        }
+      } catch (parseError) {
+        console.error('Error parsing AI response:', parseError);
+        console.error('Original response length:', response.length);
+        console.error('Cleaned response:', cleanedResponse);
+        
+        // Try to extract partial data if possible
+        let partialData = null;
+        try {
+          // Look for name field in the response
+          const nameMatch = response.match(/"name":\s*"([^"]+)"/);
+          const descMatch = response.match(/"description":\s*"([^"]+)"/);
+          const riskMatch = response.match(/"riskLevel":\s*"([^"]+)"/);
+          const returnMatch = response.match(/"expectedReturn":\s*"([^"]+)"/);
+          
+          if (nameMatch) {
+            partialData = {
+              name: nameMatch[1],
+              description: descMatch ? descMatch[1] : `Investment analysis for ${investmentDescription || categoryName}`,
+              riskLevel: riskMatch ? riskMatch[1] : "Medium",
+              expectedReturn: returnMatch ? returnMatch[1] : "6-10%",
+              timeHorizon: "Medium-term",
+              keyMetrics: ["ROI", "Volatility", "Market Analysis"],
+              recommendedAssets: [],
+              riskFactors: ["Market volatility", "Economic conditions"],
+              marketTrends: "Analysis based on available data",
+              investmentStrategy: "Diversified approach recommended",
+              rebalancingFrequency: "Quarterly",
+              taxConsiderations: "Consult with tax advisor",
+              estimatedAmount: dollarAmount || 'Not specified'
+            };
+          }
+        } catch (extractError) {
+          console.error('Error extracting partial data:', extractError);
+        }
+        
+        if (partialData) {
+          setGeneratedContent(partialData);
+        } else {
+          // Intelligent fallback category structure based on input
+          const isVintageCar = investmentDescription.toLowerCase().includes('car') || investmentDescription.toLowerCase().includes('vintage');
+          const isRealEstate = investmentDescription.toLowerCase().includes('property') || investmentDescription.toLowerCase().includes('real estate');
+          
+          let intelligentFallback;
+          
+          if (isVintageCar) {
+            intelligentFallback = {
+              name: 'Vintage Car Investment',
+              description: `Investment in vintage automobiles with estimated appreciation of 2% annually. Based on description: ${investmentDescription}`,
+              riskLevel: "Medium",
+              expectedReturn: "2-4%",
+              timeHorizon: "Long-term",
+              keyMetrics: ["Appreciation Rate", "Condition Score", "Rarity Index", "Market Demand", "Maintenance Costs"],
+              recommendedAssets: [
+                {
+                  symbol: "VINTAGE_AUTO",
+                  name: "Classic Automobile Collection",
+                  allocation: "100%",
+                  rationale: "Direct investment in appreciating vintage vehicle",
+                  currentPrice: dollarAmount || "40000",
+                  marketCap: "Collectible Auto Market"
+                }
+              ],
+              riskFactors: ["Market volatility", "Maintenance costs", "Storage requirements", "Insurance costs", "Liquidity constraints"],
+              marketTrends: "Vintage car market showing steady appreciation, particularly for well-maintained classics",
+              investmentStrategy: "Buy and hold strategy with proper maintenance and storage",
+              rebalancingFrequency: "Annual assessment",
+              taxConsiderations: "Capital gains tax on appreciation, potential collectible tax rates",
+              specificMetrics: {
+                appreciationRate: "2% annually",
+                volatility: "15-25%",
+                liquidityScore: "4/10",
+                marketSize: "Niche collectible market"
+              }
+            };
+          } else if (isRealEstate) {
+            intelligentFallback = {
+              name: 'Real Estate Investment',
+              description: `Real estate investment opportunity. ${investmentDescription}`,
+              riskLevel: "Medium",
+              expectedReturn: "6-12%",
+              timeHorizon: "Long-term",
+              keyMetrics: ["Cap Rate", "Cash Flow", "Appreciation", "Occupancy Rate", "NOI"],
+              recommendedAssets: [],
+              riskFactors: ["Market cycles", "Interest rate changes", "Property management"],
+              marketTrends: "Real estate market analysis based on location and property type",
+              investmentStrategy: "Location-based buy and hold strategy",
+              rebalancingFrequency: "Annual",
+              taxConsiderations: "Depreciation benefits, 1031 exchanges, capital gains"
+            };
+          } else {
+            intelligentFallback = {
+              name: activeTab === 'quick' ? categoryName : 'Custom Investment Category',
+              description: activeTab === 'quick' ? `Investment category for ${categoryName}` : investmentDescription,
+              riskLevel: "Medium",
+              expectedReturn: "6-10%",
+              timeHorizon: "Medium-term",
+              keyMetrics: ["ROI", "Volatility", "Sharpe Ratio", "Beta", "Alpha"],
+              recommendedAssets: [],
+              riskFactors: ["Market volatility", "Economic conditions", "Sector-specific risks"],
+              marketTrends: "Market analysis based on investment type",
+              investmentStrategy: "Diversified approach with risk management",
+              rebalancingFrequency: "Quarterly",
+              taxConsiderations: "Standard investment tax implications"
+            };
+          }
+          
+          setGeneratedContent({
+            ...intelligentFallback,
+            estimatedAmount: dollarAmount || 'Not specified'
+          });
+        }
       }
     } catch (error) {
       console.error('Error generating category:', error);
@@ -602,31 +681,64 @@ const WelcomeModal = ({ isOpen, onClose, darkMode }) => {
       exit={{ opacity: 0 }}
     >
       <motion.div 
-        className={`relative w-full max-w-md mx-auto rounded-xl overflow-hidden shadow-xl ${darkMode ? 'bg-slate-800' : 'bg-white'}`}
+        className={`relative w-full max-w-lg mx-auto rounded-xl overflow-hidden shadow-xl ${darkMode ? 'bg-slate-800' : 'bg-white'}`}
         initial={{ scale: 0.9, y: 20 }}
         animate={{ scale: 1, y: 0 }}
         exit={{ scale: 0.9, y: 20 }}
         transition={{ type: "spring", damping: 25 }}
       >
-        <div className="p-6">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-slate-800'}`}>Welcome to TrackVest</h2>
+        <div className="p-8">
+          <div className="flex justify-between items-start mb-6">
+            <div className="flex items-center gap-3">
+              <img src="/src/trackvest.png" alt="TrackVest Logo" className="w-12 h-12" onError={(e) => { e.target.style.display = 'none'; }} />
+              <div>
+                <h2 className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-slate-800'}`}>Welcome to TrackVest!</h2>
+                <p className={`text-sm ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>AI-powered investment tracking</p>
+              </div>
+            </div>
             <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={onClose}>
               <X className="h-4 w-4" />
             </Button>
           </div>
           
-          <div className={`mb-6 ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>
-            <p className="mb-3">TrackVest is your all-in-one portfolio tracker for stocks, cryptocurrencies, and real estate investments.</p>
-            <p className="mb-3">Monitor your investments in real-time, analyze performance, and get AI-powered insights to make better investment decisions.</p>
+          <div className={`mb-6 space-y-4 ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+            <p className="text-lg leading-relaxed">
+              Hi! I created this <span className="font-semibold text-emerald-500">free-to-use AI-powered platform</span> for tracking any kind of investment. 
+            </p>
+            
+            <p>
+              TrackVest uses free APIs to feed accurate data to your dashboard and lets you discover insights from your portfolio through quick prompts with the AI assistant.
+            </p>
+            
+            <div className={`p-4 rounded-lg ${darkMode ? 'bg-slate-700/50 border-l-4 border-emerald-500' : 'bg-emerald-50 border-l-4 border-emerald-500'}`}>
+              <p className="text-sm">
+                <span className="font-medium">This is the first version</span> and I expect to make heaps of improvements over the next couple of months. I hope you enjoy it!
+              </p>
+            </div>
+            
+            <p className="text-sm">
+              Feel free to reach out to me directly for any feedback or questions.
+            </p>
+            
+            <div className="flex items-center gap-2 pt-2">
+              <span className="text-sm font-medium">— Ayan</span>
+              <a 
+                href="https://ayanj.com/" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className={`text-sm hover:underline ${darkMode ? 'text-emerald-400 hover:text-emerald-300' : 'text-emerald-600 hover:text-emerald-700'} transition-colors`}
+              >
+                ayanj.com
+              </a>
+            </div>
           </div>
           
           <div className="flex justify-end">
             <Button 
               onClick={onClose}
-              className={`${darkMode ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-emerald-500 hover:bg-emerald-400'} text-white`}
+              className={`${darkMode ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-emerald-500 hover:bg-emerald-400'} text-white px-6`}
             >
-              Get Started
+              Start Tracking!
             </Button>
           </div>
         </div>
@@ -640,39 +752,49 @@ const OnboardingModal = ({ isOpen, onClose, darkMode, currentStep, onNext, onPre
   const steps = [
     {
       title: "Welcome to TrackVest",
-      content: "Your comprehensive portfolio tracking platform for stocks, crypto, and real estate investments.",
-      icon: "🏠",
-      features: ["Real-time portfolio tracking", "AI-powered insights", "Multi-asset support"]
+      content: "Your AI-powered investment tracking platform that handles any type of investment - from traditional stocks to alternative assets.",
+      icon: "logo",
+      features: ["Track vintage cars, art, crypto, real estate", "Zero-cost API integrations", "AI researches investments for you"]
     },
     {
       title: "Portfolio Overview",
-      content: "Track your entire investment portfolio in one place with real-time updates and performance analytics.",
+      content: "Get a comprehensive view of your entire portfolio with performance charts, asset allocation, and trend analysis.",
       icon: "📊",
-      features: ["Live price updates", "Performance charts", "Asset allocation visualization"]
+      features: ["Generate custom performance comparisons", "Side-by-side stock analysis charts", "Interactive asset allocation breakdowns"]
     },
     {
-      title: "Stocks & Crypto",
-      content: demoMode.polygon ? "Add and track stocks and cryptocurrencies with live market data." : "Demo mode: Explore sample stock and crypto data (API key required for live data).",
+      title: "Stocks & Crypto Tracking",
+      content: demoMode.polygon ? "Live stock and crypto data via Polygon.io API. Data is ~2 days behind on free tier, but I'm working on a free real-time solution!" : "Demo mode: Uses Polygon.io API for live data (free tier has 2-day delay). Add your API key to get started!",
       icon: "💹",
-      features: demoMode.polygon ? ["Live market data", "Price alerts", "Technical analysis"] : ["Sample data", "Demo functionality", "Get API key for live data"]
+      features: demoMode.polygon ? ["Polygon.io professional-grade data", "2-day delay (upgrading to real-time)", "Free tier with premium features"] : ["Professional market data access", "Get free Polygon.io API key", "Upgrade path to real-time data"]
     },
     {
       title: "Real Estate Tracking",
-      content: demoMode.gemini ? "Add properties and get AI-powered valuations and market insights." : "Demo mode: Explore sample real estate data (Gemini API key required for AI features).",
+      content: demoMode.gemini ? "Smart real estate tracking that circumvents expensive data providers using Google web scraping for property valuations." : "Demo mode: Uses AI and web scraping to avoid expensive real estate data APIs. Add Gemini API key for full features!",
       icon: "🏡",
-      features: demoMode.gemini ? ["AI property valuations", "Market analysis", "Rental income tracking"] : ["Sample properties", "Demo valuations", "Get API key for AI features"]
+      features: demoMode.gemini ? ["Google web scraping for live valuations", "Bypass $1000+/month real estate APIs", "AI-powered property market analysis"] : ["Smart grounded webscraping", "Avoid expensive real estate data fees", "Get Gemini API key for AI features"]
     },
     {
       title: "AI Investment Assistant",
-      content: demoMode.gemini ? "Chat with our AI assistant for investment insights and market analysis." : "Demo mode: Limited AI functionality (Gemini API key required for full features).",
+      content: demoMode.gemini ? "Chat with the AI assistant for limitless data insights, investment analysis, and portfolio optimization. Ask anything about your investments!" : "Demo mode: AI assistant with limitless data insights and investment analysis. Requires Gemini API key for full functionality.",
       icon: "🤖",
-      features: demoMode.gemini ? ["Investment advice", "Market analysis", "Portfolio optimization"] : ["Basic responses", "Demo mode", "Get API key for full AI"]
+      features: demoMode.gemini ? ["Limitless data insights on any topic", "Custom investment strategy recommendations", "Real-time market sentiment analysis"] : ["Sample AI responses", "Limitless data insight capability", "Get Gemini API key for full access"]
     },
     {
-      title: "Advanced Analytics",
-      content: "Generate custom charts, analyze risk metrics, and create investment categories with AI research.",
+      title: "Alternative Investments",
+      content: "Use the + button to add ANY type of investment - vintage cars, art, collectibles, private equity. The AI will research it and help you track it!",
       icon: "📈",
-      features: ["Custom chart generation", "Risk analysis", "AI-powered research"]
+      features: ["AI auto-researches any investment type", "Track collectibles, art, vintage items", "Automatic valuation and trend analysis"]
+    },
+    {
+      title: "Coming Soon",
+      content: "Exciting new features are in development to make TrackVest even more powerful and accessible!",
+      icon: "🚀",
+      features: [
+        "Mobile app + secure database caching (your data stays private)",
+        "Enhanced web-scraped insights with smarter data collection",
+        "Automated API integration after creating investment categories"
+      ]
     }
   ];
 
@@ -696,7 +818,13 @@ const OnboardingModal = ({ isOpen, onClose, darkMode, currentStep, onNext, onPre
       >
         <div className="p-8">
           <div className="text-center mb-6">
-            <div className="text-6xl mb-4">{currentStepData.icon}</div>
+            {currentStepData.icon === "logo" ? (
+              <div className="flex justify-center mb-4">
+                <img src="/src/trackvest.png" alt="TrackVest Logo" className="w-16 h-16" onError={(e) => { e.target.style.display = 'none'; }} />
+              </div>
+            ) : (
+              <div className="text-6xl mb-4">{currentStepData.icon}</div>
+            )}
             <h2 className={`text-2xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-slate-800'}`}>
               {currentStepData.title}
             </h2>
@@ -813,13 +941,18 @@ const OnboardingModal = ({ isOpen, onClose, darkMode, currentStep, onNext, onPre
 
 export default function TrackVestApp() {
   // State for API key
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('polygonApiKey') || '');
+  const [apiKey] = useState(() => localStorage.getItem('polygonApiKey') || '');
   const [showApiInput, setShowApiInput] = useState(false);
-  const [apiError, setApiError] = useState(""); // General API error
   const [refreshApiError, setRefreshApiError] = useState(""); // Specific error during refresh
 
   // Use theme context instead of local state
   const { darkMode, setDarkMode } = useTheme();
+  
+  // Tutorial and refresh tracking state
+  const [hasUserRefreshed, setHasUserRefreshed] = useState(() => {
+    return localStorage.getItem('hasUserRefreshed') === 'true';
+  });
+  const [showTutorial, setShowTutorial] = useState(true);
   
   // Demo mode detection
   const [demoMode, setDemoMode] = useState(() => {
@@ -930,49 +1063,169 @@ export default function TrackVestApp() {
   const [isLoading, setIsLoading] = useState(false);
   
   // Market data state
-  const [marketData, setMarketData] = useState(null);
+  const [marketData] = useState(null);
   
   // Performance data state
-  const [performanceData, setPerformanceData] = useState([
-    { month: 'Jan', value: 42000 }, { month: 'Feb', value: 44000 }, { month: 'Mar', value: 46500 },
-    { month: 'Apr', value: 45800 }, { month: 'May', value: 47200 }, { month: 'Jun', value: 48300 },
-    { month: 'Jul', value: 47900 }, { month: 'Aug', value: 49700 }, { month: 'Sep', value: 52000 },
-    { month: 'Oct', value: 54500 }, { month: 'Nov', value: 57200 }, { month: 'Dec', value: 60000 }
-  ]);
+  const [performanceData, setPerformanceData] = useState(() => {
+    // Try to load cached analytics data
+    try {
+      const analyticsCache = localStorage.getItem('analyticsCache');
+      if (analyticsCache) {
+        const cached = JSON.parse(analyticsCache);
+        const cacheAge = Date.now() - new Date(cached.lastUpdated).getTime();
+        
+        // Use cached data if it's less than 1 hour old
+        if (cacheAge < 60 * 60 * 1000 && cached.performanceData && cached.performanceData.length > 0) {
+          console.log('Loading cached performance data during initialization, age:', Math.round(cacheAge / 1000 / 60), 'minutes');
+          return cached.performanceData;
+        }
+      }
+    } catch (error) {
+      console.error('Error loading cached performance data during initialization:', error);
+    }
+    
+    // Fallback to default performance data
+    return [
+      { month: 'Jan', value: 42000 }, { month: 'Feb', value: 44000 }, { month: 'Mar', value: 46500 },
+      { month: 'Apr', value: 45800 }, { month: 'May', value: 47200 }, { month: 'Jun', value: 48300 },
+      { month: 'Jul', value: 47900 }, { month: 'Aug', value: 49700 }, { month: 'Sep', value: 52000 },
+      { month: 'Oct', value: 54500 }, { month: 'Nov', value: 57200 }, { month: 'Dec', value: 60000 }
+    ];
+  });
 
   // Risk data
-  const [riskData, setRiskData] = useState([
-    { name: 'AAPL', risk: 12, return: 15 }, { name: 'MSFT', risk: 10, return: 12 },
-    { name: 'GOOGL', risk: 15, return: 17 }, { name: 'BTC', risk: 28, return: 32 },
-    { name: 'ETH', risk: 25, return: 30 },
-  ]);
+  const [riskData, setRiskData] = useState(() => {
+    // Try to load cached analytics data
+    try {
+      const analyticsCache = localStorage.getItem('analyticsCache');
+      if (analyticsCache) {
+        const cached = JSON.parse(analyticsCache);
+        const cacheAge = Date.now() - new Date(cached.lastUpdated).getTime();
+        
+        // Use cached data if it's less than 1 hour old
+        if (cacheAge < 60 * 60 * 1000 && cached.riskData && cached.riskData.length > 0) {
+          console.log('Loading cached risk data during initialization');
+          return cached.riskData;
+        }
+      }
+    } catch (error) {
+      console.error('Error loading cached risk data during initialization:', error);
+    }
+    
+    // Fallback to default risk data
+    return [
+      { name: 'AAPL', risk: 12, return: 15 }, { name: 'MSFT', risk: 10, return: 12 },
+      { name: 'GOOGL', risk: 15, return: 17 }, { name: 'BTC', risk: 28, return: 32 },
+      { name: 'ETH', risk: 25, return: 30 },
+    ];
+  });
 
   // Asset allocation data
-  const [assetAllocation, setAssetAllocation] = useState([
-    { name: "Technology", value: 38, color: "#10b981" }, { name: "Crypto", value: 27, color: "#8b5cf6" },
-    { name: "Healthcare", value: 12, color: "#3b82f6" }, { name: "Consumer", value: 15, color: "#f59e0b" },
-    { name: "Energy", value: 8, color: "#ec4899" }
-  ]);
+  const [assetAllocation, setAssetAllocation] = useState(() => {
+    // Try to load cached analytics data
+    try {
+      const analyticsCache = localStorage.getItem('analyticsCache');
+      if (analyticsCache) {
+        const cached = JSON.parse(analyticsCache);
+        const cacheAge = Date.now() - new Date(cached.lastUpdated).getTime();
+        
+        // Use cached data if it's less than 1 hour old
+        if (cacheAge < 60 * 60 * 1000 && cached.assetAllocation && cached.assetAllocation.length > 0) {
+          console.log('Loading cached asset allocation during initialization');
+          return cached.assetAllocation;
+        }
+      }
+    } catch (error) {
+      console.error('Error loading cached asset allocation during initialization:', error);
+    }
+    
+    // Fallback to default asset allocation
+    return [
+      { name: "Technology", value: 38, color: "#10b981" }, { name: "Crypto", value: 27, color: "#8b5cf6" },
+      { name: "Healthcare", value: 12, color: "#3b82f6" }, { name: "Consumer", value: 15, color: "#f59e0b" },
+      { name: "Energy", value: 8, color: "#ec4899" }
+    ];
+  });
 
   // Carbon intensity data
-  const [carbonData, setCarbonData] = useState([
-    { name: "AAPL", score: 3.2 }, { name: "MSFT", score: 2.8 }, { name: "GOOGL", score: 4.1 },
-    { name: "BTC", score: 8.9 }, { name: "ETH", score: 7.2 }
-  ]);
+  const [carbonData, setCarbonData] = useState(() => {
+    // Try to load cached analytics data
+    try {
+      const analyticsCache = localStorage.getItem('analyticsCache');
+      if (analyticsCache) {
+        const cached = JSON.parse(analyticsCache);
+        const cacheAge = Date.now() - new Date(cached.lastUpdated).getTime();
+        
+        // Use cached data if it's less than 1 hour old
+        if (cacheAge < 60 * 60 * 1000 && cached.carbonData && cached.carbonData.length > 0) {
+          console.log('Loading cached carbon data during initialization');
+          return cached.carbonData;
+        }
+      }
+    } catch (error) {
+      console.error('Error loading cached carbon data during initialization:', error);
+    }
+    
+    // Fallback to default carbon data
+    return [
+      { name: "AAPL", score: 3.2 }, { name: "MSFT", score: 2.8 }, { name: "GOOGL", score: 4.1 },
+      { name: "BTC", score: 8.9 }, { name: "ETH", score: 7.2 }
+    ];
+  });
 
   // Quantitative insights data
-  const [correlationData, setCorrelationData] = useState([
-    { name: "AAPL vs. SPY", value: 0.72 }, { name: "MSFT vs. SPY", value: 0.81 },
-    { name: "GOOGL vs. SPY", value: 0.76 }, { name: "BTC vs. SPY", value: 0.23 },
-    { name: "ETH vs. SPY", value: 0.18 }
-  ]);
+  const [correlationData, setCorrelationData] = useState(() => {
+    // Try to load cached analytics data
+    try {
+      const analyticsCache = localStorage.getItem('analyticsCache');
+      if (analyticsCache) {
+        const cached = JSON.parse(analyticsCache);
+        const cacheAge = Date.now() - new Date(cached.lastUpdated).getTime();
+        
+        // Use cached data if it's less than 1 hour old
+        if (cacheAge < 60 * 60 * 1000 && cached.correlationData && cached.correlationData.length > 0) {
+          console.log('Loading cached correlation data during initialization');
+          return cached.correlationData;
+        }
+      }
+    } catch (error) {
+      console.error('Error loading cached correlation data during initialization:', error);
+    }
+    
+    // Fallback to default correlation data
+    return [
+      { name: "AAPL vs. SPY", value: 0.72 }, { name: "MSFT vs. SPY", value: 0.81 },
+      { name: "GOOGL vs. SPY", value: 0.76 }, { name: "BTC vs. SPY", value: 0.23 },
+      { name: "ETH vs. SPY", value: 0.18 }
+    ];
+  });
   
-  const [sharpeRatios, setSharpeRatios] = useState([
-    { name: "AAPL", value: 1.3 }, { name: "MSFT", value: 1.5 }, { name: "GOOGL", value: 1.2 },
-    { name: "BTC", value: 2.1 }, { name: "ETH", value: 1.8 }
-  ]);
+  const [sharpeRatios, setSharpeRatios] = useState(() => {
+    // Try to load cached analytics data
+    try {
+      const analyticsCache = localStorage.getItem('analyticsCache');
+      if (analyticsCache) {
+        const cached = JSON.parse(analyticsCache);
+        const cacheAge = Date.now() - new Date(cached.lastUpdated).getTime();
+        
+        // Use cached data if it's less than 1 hour old
+        if (cacheAge < 60 * 60 * 1000 && cached.sharpeRatios && cached.sharpeRatios.length > 0) {
+          console.log('Loading cached Sharpe ratios during initialization');
+          return cached.sharpeRatios;
+        }
+      }
+    } catch (error) {
+      console.error('Error loading cached Sharpe ratios during initialization:', error);
+    }
+    
+    // Fallback to default Sharpe ratios
+    return [
+      { name: "AAPL", value: 1.3 }, { name: "MSFT", value: 1.5 }, { name: "GOOGL", value: 1.2 },
+      { name: "BTC", value: 2.1 }, { name: "ETH", value: 1.8 }
+    ];
+  });
   
-  const [volatilityData, setVolatilityData] = useState([
+  const [volatilityData] = useState([
     { name: "Jan", market: 12, portfolio: 10 }, { name: "Feb", market: 14, portfolio: 11 },
     { name: "Mar", market: 18, portfolio: 15 }, { name: "Apr", market: 16, portfolio: 13 },
     { name: "May", market: 15, portfolio: 12 }, { name: "Jun", market: 17, portfolio: 14 },
@@ -982,7 +1235,7 @@ export default function TrackVestApp() {
   ]);
 
   // API management state
-  const [apiKeys, setApiKeys] = useState([
+  const [apiKeys] = useState([
     { id: 1, name: "Polygon.io", key: "", service: "Stock/Crypto Data", status: "Not Set", created: "2023-11-05", visible: false },
   ]);
 
@@ -996,6 +1249,15 @@ export default function TrackVestApp() {
   const totalAnnualRent = realEstateHoldings.reduce((acc, prop) => acc + (prop.annualRent || 0), 0);
   const avgRealEstateROI = realEstateHoldings.length > 0 ?
     realEstateHoldings.reduce((acc, prop) => acc + prop.roi, 0) / realEstateHoldings.length : 0;
+
+  // Investment categories calculations
+  const totalInvestmentCategoriesValue = investmentCategories.reduce((acc, category) => {
+    const amount = parseFloat(category.estimatedAmount) || 0;
+    return acc + amount;
+  }, 0);
+
+  // Total portfolio value including all asset types
+  const totalPortfolioValue = totalValue + totalRealEstateEquity + totalInvestmentCategoriesValue;
 
   // Effects
   useEffect(() => {
@@ -1052,6 +1314,32 @@ export default function TrackVestApp() {
     }
   }, [positions, realEstateHoldings]);
 
+  // Effect to save chart and analytics data
+  useEffect(() => {
+    const saveAnalyticsData = async () => {
+      try {
+        const analyticsCache = {
+          assetAllocation,
+          performanceData,
+          riskData,
+          correlationData,
+          sharpeRatios,
+          volatilityData,
+          carbonData,
+          lastUpdated: new Date().toISOString()
+        };
+        localStorage.setItem('analyticsCache', JSON.stringify(analyticsCache));
+        console.log('Analytics data auto-saved to cache');
+      } catch (error) {
+        console.error('Error auto-saving analytics data:', error);
+      }
+    };
+
+    // Debounce the save operation
+    const timer = setTimeout(saveAnalyticsData, 1000);
+    return () => clearTimeout(timer);
+  }, [assetAllocation, performanceData, riskData, correlationData, sharpeRatios, volatilityData, carbonData]);
+
   // Function to handle closing the welcome modal
   const closeWelcomeModal = () => {
     setShowWelcome(false);
@@ -1062,7 +1350,7 @@ export default function TrackVestApp() {
 
   // Onboarding navigation functions
   const handleOnboardingNext = () => {
-    if (onboardingStep < 5) {
+    if (onboardingStep < 6) {
       setOnboardingStep(onboardingStep + 1);
     } else {
       closeOnboarding();
@@ -1291,17 +1579,16 @@ export default function TrackVestApp() {
     setAssetAllocation(newAllocation);
   };
 
-  // Save API Key
-  const saveApiKey = () => {
-    setShowApiInput(false);
-    setApiError("");
-    console.log("API Key saved (Note: Still not stored securely in this demo)");
-  };
-
-  // Refresh data using Polygon.io API or simulation
+  // Enhanced refresh data function with tutorial tracking
   const refreshData = async () => {
     setIsLoading(true);
     setRefreshApiError("");
+    
+    // Track that user has refreshed
+    if (!hasUserRefreshed) {
+      setHasUserRefreshed(true);
+      localStorage.setItem('hasUserRefreshed', 'true');
+    }
     
     // Get API key from localStorage
     const currentApiKey = localStorage.getItem('polygonApiKey') || '';
@@ -1386,6 +1673,11 @@ export default function TrackVestApp() {
     setIsLoading(false);
   };
 
+  // Function to handle tutorial refresh encouragement
+  const handleRefreshEncourage = () => {
+    refreshData();
+  };
+
   // Simulation function
   const simulateRefresh = () => {
     console.log("Running simulated refresh...");
@@ -1439,12 +1731,11 @@ export default function TrackVestApp() {
       <Header 
         darkMode={darkMode} 
         setDarkMode={setDarkMode} 
-        showApiInput={showApiInput} 
-        setShowApiInput={setShowApiInput} 
         refreshData={refreshData} 
         isLoading={isLoading}
         refreshApiError={refreshApiError}
         setShowSettings={setShowSettings}
+        onShowAbout={() => setShowWelcome(true)}
       />
       
       <main className="flex-1 container mx-auto p-4 pt-6">
@@ -1475,7 +1766,7 @@ export default function TrackVestApp() {
                   )}
                 </div>
               </TabsTrigger>
-              <TabsTrigger value="insights">Insights</TabsTrigger>
+              <TabsTrigger value="insights" data-tutorial="insights-tab">Insights</TabsTrigger>
             </TabsList>
             
             <Button
@@ -1483,6 +1774,7 @@ export default function TrackVestApp() {
               size="sm"
               className={`h-10 w-10 p-0 rounded-full shadow-lg ${darkMode ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-emerald-500 hover:bg-emerald-400'} text-white transition-all duration-200 hover:scale-110 hover:shadow-xl`}
               title="Create Investment Category"
+              data-tutorial="add-button"
             >
               <Plus className="h-5 w-5" />
             </Button>
@@ -1510,6 +1802,10 @@ export default function TrackVestApp() {
                   avgRealEstateROI={avgRealEstateROI}
                   performanceData={performanceData}
                   assetAllocation={assetAllocation}
+                  demoMode={demoMode}
+                  investmentCategories={investmentCategories}
+                  totalInvestmentCategoriesValue={totalInvestmentCategoriesValue}
+                  totalPortfolioValue={totalPortfolioValue}
                 />
               </motion.div>
             </AnimatePresence>
@@ -1600,6 +1896,15 @@ export default function TrackVestApp() {
         demoMode={demoMode}
       />
       
+      {/* Tutorial System */}
+      <TutorialSystem
+        darkMode={darkMode}
+        onRefreshEncourage={handleRefreshEncourage}
+        hasUserRefreshed={hasUserRefreshed}
+        isVisible={showTutorial}
+        onClose={() => setShowTutorial(false)}
+      />
+      
       {/* Settings Modal */}
       <AnimatePresence>
         {showSettings && (
@@ -1639,6 +1944,22 @@ export default function TrackVestApp() {
           />
         )}
       </AnimatePresence>
+      
+      {/* Footer */}
+      <footer className={`border-t ${darkMode ? 'bg-slate-900/50 border-slate-800 text-slate-400' : 'bg-white/50 border-slate-200 text-slate-600'} backdrop-blur-sm`}>
+        <div className="container mx-auto px-4 py-6">
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-4 text-sm">
+            <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4">
+              <span>© 2025 TrackVest™. All rights reserved.</span>
+              <span className="hidden sm:inline">•</span>
+              <span>Created by <a href="https://ayanj.com/" target="_blank" rel="noopener noreferrer" className={`font-medium hover:underline ${darkMode ? 'text-emerald-400 hover:text-emerald-300' : 'text-emerald-600 hover:text-emerald-700'} transition-colors`}>Ayan Jhunjhunwala</a></span>
+            </div>
+            <div className="flex items-center gap-4 text-xs">
+              <span>Track every investment!</span>
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
