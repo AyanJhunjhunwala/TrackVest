@@ -1,121 +1,101 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Smartphone, Monitor, ExternalLink } from 'lucide-react';
+import { ExternalLink } from 'lucide-react';
 
 const MobileNotSupported = () => {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex items-center justify-center p-4">
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
-        className="max-w-md w-full text-center"
+        transition={{ duration: 0.8, ease: "easeOut" }}
+        className="text-center"
       >
         {/* TrackVest Logo */}
         <motion.div
-          initial={{ scale: 0.8 }}
-          animate={{ scale: 1 }}
-          transition={{ delay: 0.2, duration: 0.5 }}
+          initial={{ scale: 0.5, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 0.3, duration: 0.8, ease: "easeOut" }}
           className="mb-8"
         >
-          <div className="w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg">
-            <span className="text-2xl font-bold text-white">TV</span>
-          </div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+          <motion.div
+            animate={{ 
+              scale: [1, 1.05, 1],
+              rotate: [0, 1, -1, 0]
+            }}
+            transition={{ 
+              duration: 4, 
+              repeat: Infinity, 
+              ease: "easeInOut" 
+            }}
+            className="w-24 h-24 mx-auto mb-6"
+          >
+            <img 
+              src="/trackvest.png" 
+              alt="TrackVest Logo" 
+              className="w-full h-full object-contain drop-shadow-2xl"
+              onError={(e) => {
+                // Fallback to styled logo
+                e.target.style.display = 'none';
+                const fallback = document.createElement('div');
+                fallback.className = 'w-full h-full bg-gradient-to-br from-slate-600 to-slate-800 dark:from-slate-700 dark:to-slate-900 rounded-3xl flex items-center justify-center shadow-2xl';
+                fallback.innerHTML = '<span class="text-3xl font-bold text-white">TV</span>';
+                e.target.parentElement.appendChild(fallback);
+              }}
+            />
+          </motion.div>
+          
+          <motion.h1
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.6, duration: 0.6 }}
+            className="text-4xl font-bold bg-gradient-to-r from-slate-700 to-slate-900 dark:from-slate-300 dark:to-slate-100 bg-clip-text text-transparent"
+          >
             TrackVest
-          </h1>
-        </motion.div>
-
-        {/* Mobile Icon */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.4, duration: 0.5 }}
-          className="mb-6"
-        >
-          <div className="relative">
-            <Smartphone className="w-16 h-16 mx-auto text-gray-400 dark:text-gray-500" />
-            <div className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center">
-              <span className="text-white text-xs font-bold">✕</span>
-            </div>
-          </div>
+          </motion.h1>
         </motion.div>
 
         {/* Main Message */}
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.6, duration: 0.5 }}
-          className="mb-8"
-        >
-          <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-200 mb-4">
-            Mobile Version Coming Soon!
-          </h2>
-          <p className="text-gray-600 dark:text-gray-400 mb-6 leading-relaxed">
-            TrackVest is currently optimized for desktop and tablet experiences. 
-            We're working hard to bring you an amazing mobile experience.
-          </p>
-        </motion.div>
-
-        {/* Desktop Recommendation */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
+          initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.8, duration: 0.5 }}
-          className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-700 mb-6"
+          transition={{ delay: 1, duration: 0.6 }}
+          className="mb-12"
         >
-          <Monitor className="w-8 h-8 mx-auto mb-3 text-blue-600" />
-          <h3 className="font-semibold text-gray-800 dark:text-gray-200 mb-2">
-            For the best experience
-          </h3>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            Please visit TrackVest on your desktop or tablet to access all features and manage your investment portfolio.
-          </p>
-        </motion.div>
-
-        {/* Coming Soon Features */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1, duration: 0.5 }}
-          className="mb-8"
-        >
-          <h4 className="font-semibold text-gray-800 dark:text-gray-200 mb-3">
-            Mobile app will include:
-          </h4>
-          <div className="grid grid-cols-2 gap-3 text-sm text-gray-600 dark:text-gray-400">
-            <div className="flex items-center">
-              <span className="w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
-              Portfolio tracking
-            </div>
-            <div className="flex items-center">
-              <span className="w-2 h-2 bg-purple-500 rounded-full mr-2"></span>
-              Real-time updates
-            </div>
-            <div className="flex items-center">
-              <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
-              AI insights
-            </div>
-            <div className="flex items-center">
-              <span className="w-2 h-2 bg-orange-500 rounded-full mr-2"></span>
-              Quick trades
-            </div>
-          </div>
+          <motion.h2
+            animate={{ 
+              opacity: [0.8, 1, 0.8]
+            }}
+            transition={{ 
+              duration: 3, 
+              repeat: Infinity, 
+              ease: "easeInOut" 
+            }}
+            className="text-2xl font-semibold text-slate-700 dark:text-slate-300"
+          >
+            Mobile version coming soon
+          </motion.h2>
         </motion.div>
 
         {/* Footer */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 1.2, duration: 0.5 }}
-          className="text-xs text-gray-500 dark:text-gray-600"
+          transition={{ delay: 1.4, duration: 0.6 }}
+          className="text-xs text-slate-500 dark:text-slate-600"
         >
-          <p className="mb-2">© 2025 TrackVest™. All rights reserved.</p>
+          <motion.p
+            animate={{ opacity: [0.7, 1, 0.7] }}
+            transition={{ duration: 3, repeat: Infinity }}
+            className="mb-2"
+          >
+            © 2025 TrackVest™. All rights reserved.
+          </motion.p>
           <a 
             href="https://ayanj.com/" 
             target="_blank" 
             rel="noopener noreferrer"
-            className="inline-flex items-center text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+            className="inline-flex items-center text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
           >
             Created by Ayan Jhunjhunwala
             <ExternalLink className="w-3 h-3 ml-1" />
