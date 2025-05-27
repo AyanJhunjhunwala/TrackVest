@@ -181,6 +181,24 @@ let marketDataCache = {
     crypto: {}
 };
 
+// Helper function to determine if we're in development or production
+const isDevelopment = () => {
+    return import.meta.env.DEV || window.location.hostname === 'localhost';
+};
+
+// Helper function to get the correct API URL
+const getApiUrl = (endpoint) => {
+    if (isDevelopment()) {
+        // In development, use the proxy
+        return endpoint;
+    } else {
+        // In production, make direct calls to Polygon.io
+        return endpoint.replace('/api/polygon/', 'https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/')
+                      .replace('/api/polygon/daily/crypto', 'https://api.polygon.io/v2/aggs/grouped/locale/global/market/crypto/')
+                      .replace('/api/polygon/open-close', 'https://api.polygon.io/v1/open-close/');
+    }
+};
+
 // Function to fetch all stock data for a specific day
 export const fetchDailyMarketData = async (apiKey) => {
     // Use the hardcoded Polygon key if none provided
@@ -212,8 +230,14 @@ export const fetchDailyMarketData = async (apiKey) => {
         };
         
         // Fetch stock data
-        // Use our server proxy instead of Polygon directly
-        const stocksUrl = `/api/polygon/daily?date=${date}&apiKey=${key}`;
+        let stocksUrl;
+        if (isDevelopment()) {
+            // Use our server proxy in development
+            stocksUrl = `/api/polygon/daily?date=${date}&apiKey=${key}`;
+        } else {
+            // Make direct call to Polygon.io in production
+            stocksUrl = `https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/${date}?adjusted=true&apiKey=${key}`;
+        }
         const stocksResponse = await fetch(stocksUrl);
         
         if (!stocksResponse.ok) {
@@ -248,7 +272,12 @@ export const fetchDailyMarketData = async (apiKey) => {
         
         // Fetch crypto data using the same grouped endpoint but for crypto market
         console.log(`Fetching grouped daily crypto market data for ${date} (${formattedDate})`);
-        const cryptoUrl = `/api/polygon/daily/crypto?date=${date}&apiKey=${key}`;
+        let cryptoUrl;
+        if (isDevelopment()) {
+            cryptoUrl = `/api/polygon/daily/crypto?date=${date}&apiKey=${key}`;
+        } else {
+            cryptoUrl = `https://api.polygon.io/v2/aggs/grouped/locale/global/market/crypto/${date}?adjusted=true&apiKey=${key}`;
+        }
         const cryptoResponse = await fetch(cryptoUrl);
         
         if (cryptoResponse.ok) {
@@ -281,6 +310,18 @@ export const fetchDailyMarketData = async (apiKey) => {
         return marketDataCache;
     } catch (error) {
         console.error(`Error fetching market data for ${date}:`, error);
+        
+        // In production, if API calls fail, return simulated data to keep the app functional
+        if (!isDevelopment()) {
+            console.warn('API call failed in production, using simulated data');
+            return {
+                date,
+                stocks: {},
+                crypto: {},
+                simulated: true
+            };
+        }
+        
         throw error;
     }
 };
@@ -290,8 +331,12 @@ async function fetchSpecificDateData(specificDate, apiKey) {
     console.log(`Attempting to fetch data specifically for ${specificDate}`);
     
     try {
-        // Use our server proxy instead of Polygon directly
-        const stocksUrl = `/api/polygon/daily?date=${specificDate}&apiKey=${apiKey}`;
+        let stocksUrl;
+        if (isDevelopment()) {
+            stocksUrl = `/api/polygon/daily?date=${specificDate}&apiKey=${apiKey}`;
+        } else {
+            stocksUrl = `https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/${specificDate}?adjusted=true&apiKey=${apiKey}`;
+        }
         const stocksResponse = await fetch(stocksUrl);
         
         if (!stocksResponse.ok) {
@@ -327,7 +372,12 @@ async function fetchSpecificDateData(specificDate, apiKey) {
         }
         
         // Also try to fetch crypto data for the fallback date
-        const cryptoUrl = `/api/polygon/daily/crypto?date=${specificDate}&apiKey=${apiKey}`;
+        let cryptoUrl;
+        if (isDevelopment()) {
+            cryptoUrl = `/api/polygon/daily/crypto?date=${specificDate}&apiKey=${apiKey}`;
+        } else {
+            cryptoUrl = `https://api.polygon.io/v2/aggs/grouped/locale/global/market/crypto/${specificDate}?adjusted=true&apiKey=${apiKey}`;
+        }
         const cryptoResponse = await fetch(cryptoUrl);
         
         if (cryptoResponse.ok) {
@@ -386,7 +436,12 @@ export const fetchStockPrice = async (symbol, apiKey) => {
         // If not found in cache after fetching grouped market data, go directly to individual API call
         // We don't need to fetch grouped data again as we already tried that in fetchDailyMarketData
         console.log(`Symbol ${upperSymbol} not found in cache, trying individual API call`);
-        const url = `/api/polygon/open-close?symbol=${upperSymbol}&date=${date}&apiKey=${key}`;
+        let url;
+        if (isDevelopment()) {
+            url = `/api/polygon/open-close?symbol=${upperSymbol}&date=${date}&apiKey=${key}`;
+        } else {
+            url = `https://api.polygon.io/v1/open-close/${upperSymbol}/${date}?adjusted=true&apiKey=${key}`;
+        }
         const response = await fetch(url);
         
         if (!response.ok) {
@@ -442,7 +497,12 @@ export const fetchCryptoPrice = async (symbol, apiKey) => {
         // We don't need to fetch grouped data again as we already tried that in fetchDailyMarketData
         console.log(`Symbol ${upperSymbol} not found in cache, trying individual API call`);
         const ticker = `X:${upperSymbol}USD`;
-        const url = `/api/polygon/open-close?symbol=${ticker}&date=${date}&apiKey=${key}`;
+        let url;
+        if (isDevelopment()) {
+            url = `/api/polygon/open-close?symbol=${ticker}&date=${date}&apiKey=${key}`;
+        } else {
+            url = `https://api.polygon.io/v1/open-close/${ticker}/${date}?adjusted=true&apiKey=${key}`;
+        }
         const response = await fetch(url);
         
         if (!response.ok) {
