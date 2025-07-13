@@ -15,7 +15,7 @@ export default function Header({
   // Logo component
   const Logo = () => (
     <div className="flex items-center gap-2">
-      <img src="/src/trackvest.png" alt="TrackVest Logo" className="w-8 h-8" onError={(e) => { e.target.style.display = 'none'; }} />
+      <img src="/trackvest.png" alt="TrackVest Logo" className="w-8 h-8" onError={(e) => { e.target.style.display = 'none'; }} />
       <span className="text-xl sm:text-2xl font-bold tracking-tighter">TrackVest</span>
       <Button
         variant="ghost"

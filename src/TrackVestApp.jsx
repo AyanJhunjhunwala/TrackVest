@@ -692,7 +692,7 @@ const WelcomeModal = ({ isOpen, onClose, darkMode }) => {
         <div className="p-8">
           <div className="flex justify-between items-start mb-6">
             <div className="flex items-center gap-3">
-              <img src="/src/trackvest.png" alt="TrackVest Logo" className="w-12 h-12" onError={(e) => { e.target.style.display = 'none'; }} />
+              <img src="/trackvest.png" alt="TrackVest Logo" className="w-12 h-12" onError={(e) => { e.target.style.display = 'none'; }} />
               <div>
                 <h2 className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-slate-800'}`}>Welcome to TrackVest!</h2>
                 <p className={`text-sm ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>AI-powered investment tracking</p>
@@ -822,7 +822,7 @@ const OnboardingModal = ({ isOpen, onClose, darkMode, currentStep, onNext, onPre
           <div className="text-center mb-6">
             {currentStepData.icon === "logo" ? (
               <div className="flex justify-center mb-4">
-                <img src="/src/trackvest.png" alt="TrackVest Logo" className="w-16 h-16" onError={(e) => { e.target.style.display = 'none'; }} />
+                <img src="/trackvest.png" alt="TrackVest Logo" className="w-16 h-16" onError={(e) => { e.target.style.display = 'none'; }} />
               </div>
             ) : (
               <div className="text-6xl mb-4">{currentStepData.icon}</div>
@@ -1266,7 +1266,7 @@ export default function TrackVestApp() {
 
   // Effects
   useEffect(() => {
-    document.title = "TrackVest - Portfolio Tracker";
+    document.title = "TrackVest - Track Everything!";
 
     // Set favicon
     let link = document.querySelector("link[rel~='icon']");
@@ -1275,7 +1275,7 @@ export default function TrackVestApp() {
       link.rel = 'icon';
       document.getElementsByTagName('head')[0].appendChild(link);
     }
-    link.href = '/src/trackvest.png';
+    link.href = '/trackvest.png';
     link.type = 'image/png';
     
     // Check if it's the first visit and show onboarding
