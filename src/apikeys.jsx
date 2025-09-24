@@ -17,7 +17,6 @@ export default function ApiKeysTab({ darkMode, apiKeys, setApiKeys }) {
   const [isPolygonKeyVisible, setIsPolygonKeyVisible] = useState(false);
   const [polygonApiKey, setPolygonApiKey] = useState(localStorage.getItem('polygonApiKey') || "");
 
-  // Save Gemini API key to localStorage
   useEffect(() => {
     if (savedGeminiApiKey) {
       localStorage.setItem('geminiApiKey', savedGeminiApiKey);
